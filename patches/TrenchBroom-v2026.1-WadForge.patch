@@ -1,0 +1,962 @@
+diff --git a/lib/TbGlLib/include/gl/Material.h b/lib/TbGlLib/include/gl/Material.h
+index eaa6556..6d7c182 100644
+--- a/lib/TbGlLib/include/gl/Material.h
++++ b/lib/TbGlLib/include/gl/Material.h
+@@ -88,6 +88,7 @@ class Material
+ {
+ private:
+   std::string m_name;
++  std::string m_displayName;
+   std::string m_collectionName;
+   std::filesystem::path m_absolutePath;
+   std::filesystem::path m_relativePath;
+@@ -110,6 +111,7 @@ private:
+   kdl_reflect_decl(
+     Material,
+     m_name,
++    m_displayName,
+     m_collectionName,
+     m_absolutePath,
+     m_relativePath,
+@@ -130,8 +132,17 @@ public:
+
+   ~Material();
+
++  /**
++   * Internal material identifier used for lookup, face attributes and MAP output.
++   */
+   const std::string& name() const;
+
++  /**
++   * User-facing name. Defaults to name() when no display alias exists.
++   */
++  const std::string& displayName() const;
++  void setDisplayName(std::string displayName);
++
+   const std::string& collectionName() const;
+   void setCollectionName(std::string collectionName);
+
+diff --git a/lib/TbGlLib/src/Material.cpp b/lib/TbGlLib/src/Material.cpp
+index 017e7c8..d391866 100644
+--- a/lib/TbGlLib/src/Material.cpp
++++ b/lib/TbGlLib/src/Material.cpp
+@@ -94,6 +94,7 @@ kdl_reflect_impl(Material);
+
+ Material::Material(std::string name, std::shared_ptr<TextureResource> textureResource)
+   : m_name{std::move(name)}
++  , m_displayName{m_name}
+   , m_textureResource{std::move(textureResource)}
+ {
+ }
+@@ -102,6 +103,7 @@ Material::~Material() = default;
+
+ Material::Material(Material&& other)
+   : m_name{std::move(other.m_name)}
++  , m_displayName{std::move(other.m_displayName)}
+   , m_collectionName{std::move(other.m_collectionName)}
+   , m_absolutePath{std::move(other.m_absolutePath)}
+   , m_relativePath{std::move(other.m_relativePath)}
+@@ -116,6 +118,7 @@ Material::Material(Material&& other)
+ Material& Material::operator=(Material&& other)
+ {
+   m_name = std::move(other.m_name);
++  m_displayName = std::move(other.m_displayName);
+   m_collectionName = std::move(other.m_collectionName);
+   m_absolutePath = std::move(other.m_absolutePath);
+   m_relativePath = std::move(other.m_relativePath);
+@@ -132,6 +135,16 @@ const std::string& Material::name() const
+   return m_name;
+ }
+
++const std::string& Material::displayName() const
++{
++  return m_displayName;
++}
++
++void Material::setDisplayName(std::string displayName)
++{
++  m_displayName = displayName.empty() ? m_name : std::move(displayName);
++}
++
+ const std::string& Material::collectionName() const
+ {
+   return m_collectionName;
+diff --git a/lib/TbMdlLib/CMakeLists.txt b/lib/TbMdlLib/CMakeLists.txt
+index 524a07c..d75b0e3 100644
+--- a/lib/TbMdlLib/CMakeLists.txt
++++ b/lib/TbMdlLib/CMakeLists.txt
+@@ -93,6 +93,7 @@ target_sources(TbMdlLib
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadM8Texture.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadM32Texture.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadMaterialCollections.cpp
++    ${CMAKE_CURRENT_SOURCE_DIR}/src/WadForgeAliases.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadMd2Model.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadMd3Model.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/LoadMdlModel.cpp
+diff --git a/lib/TbMdlLib/include/mdl/WadForgeAliases.h b/lib/TbMdlLib/include/mdl/WadForgeAliases.h
+new file mode 100644
+index 0000000..9f0b04b
+--- /dev/null
++++ b/lib/TbMdlLib/include/mdl/WadForgeAliases.h
+@@ -0,0 +1,33 @@
++/*
++ Copyright (C) 2026 Strissel Studios
++
++ This file is part of the WadForge-compatible TrenchBroom build.
++
++ TrenchBroom is free software: you can redistribute it and/or modify
++ it under the terms of the GNU General Public License as published by
++ the Free Software Foundation, either version 3 of the License, or
++ any later version.
++ */
++#pragma once
++
++#include <filesystem>
++#include <optional>
++#include <string>
++
++namespace tb::mdl
++{
++
++/**
++ * Returns the WadForge display alias for the given internal WAD texture name.
++ *
++ * The sidecar manifest is expected at:
++ *
++ * <wad path>.wadforge.json
++ *
++ * The returned name is display-only. Material::name() remains the internal,
++ * engine-safe identifier used by brushes and MAP serialization.
++ */
++std::optional<std::string> wadForgeDisplayName(
++  const std::filesystem::path& wadPath, const std::string& internalName);
++
++} // namespace tb::mdl
+\ No newline at end of file
+diff --git a/lib/TbMdlLib/src/LoadMaterialCollections.cpp b/lib/TbMdlLib/src/LoadMaterialCollections.cpp
+index a7ec7f6..ecea62c 100644
+--- a/lib/TbMdlLib/src/LoadMaterialCollections.cpp
++++ b/lib/TbMdlLib/src/LoadMaterialCollections.cpp
+@@ -34,6 +34,7 @@
+ #include "mdl/LoadTexture.h"
+ #include "mdl/MaterialUtils.h"
+ #include "mdl/Palette.h"
++#include "mdl/WadForgeAliases.h"
+ #include "mdl/Quake3Shader.h"
+
+ #include "kd/contracts.h"
+@@ -383,10 +384,52 @@ Result<gl::Material> loadMaterial(
+              fs.makeAbsolute(materialPath)
+                | kdl::transform([&](auto absPath) { material.setAbsolutePath(absPath); })
+                | kdl::or_else([](auto) { return kdl::void_success; });
+-             material.setRelativePath(materialPath);
+-             material.setCollectionName(
+-               materialCollectionName(fs, materialConfig, materialPath));
+-             return material;
++              material.setRelativePath(materialPath);
++              material.setCollectionName(
++                materialCollectionName(fs, materialConfig, materialPath));
++
++              if (const auto* metadata =
++                    fs.metadata(
++                      materialPath,
++                      fs::FileSystemMetadataKeys::ImageFilePath);
++                  metadata
++                  && std::holds_alternative<std::filesystem::path>(*metadata))
++              {
++                const auto& imageFilePath =
++                  std::get<std::filesystem::path>(*metadata);
++
++                if (
++                  kdl::path_has_extension(
++                    kdl::path_to_lower(imageFilePath),
++                    ".wad"))
++                {
++                  auto displayName =
++                    wadForgeDisplayName(
++                      imageFilePath,
++                      material.name());
++
++                  if (!displayName)
++                  {
++                    const auto wadForgeInternalName =
++                      std::filesystem::path{material.name()}
++                        .filename()
++                        .string();
++
++                    displayName =
++                      wadForgeDisplayName(
++                        imageFilePath,
++                        wadForgeInternalName);
++                  }
++
++                  if (displayName)
++                  {
++                    material.setDisplayName(
++                      std::move(*displayName));
++                  }
++                }
++              }
++
++              return material;
+            });
+ }
+
+diff --git a/lib/TbMdlLib/src/WadForgeAliases.cpp b/lib/TbMdlLib/src/WadForgeAliases.cpp
+new file mode 100644
+index 0000000..2a7a95a
+--- /dev/null
++++ b/lib/TbMdlLib/src/WadForgeAliases.cpp
+@@ -0,0 +1,672 @@
++/*
++ Copyright (C) 2026 Strissel Studios
++
++ This file is part of the WadForge-compatible TrenchBroom build.
++
++ TrenchBroom is free software: you can redistribute it and/or modify
++ it under the terms of the GNU General Public License as published by
++ the Free Software Foundation, either version 3 of the License, or
++ any later version.
++ */
++#include "mdl/WadForgeAliases.h"
++
++#include <algorithm>
++#include <cctype>
++#include <cstdint>
++#include <filesystem>
++#include <fstream>
++#include <iterator>
++#include <mutex>
++#include <optional>
++#include <stdexcept>
++#include <string>
++#include <string_view>
++#include <unordered_map>
++#include <utility>
++
++namespace tb::mdl
++{
++namespace
++{
++
++using AliasMap = std::unordered_map<std::string, std::string>;
++
++struct ParsedManifest
++{
++  std::optional<std::string> wadFileName;
++  AliasMap aliases;
++};
++
++std::string asciiLower(std::string value)
++{
++  std::ranges::transform(value, value.begin(), [](const unsigned char character) {
++    return static_cast<char>(std::tolower(character));
++  });
++
++  return value;
++}
++
++void appendUtf8(std::string& output, const std::uint32_t codePoint)
++{
++  if (codePoint <= 0x7Fu)
++  {
++    output.push_back(static_cast<char>(codePoint));
++  }
++  else if (codePoint <= 0x7FFu)
++  {
++    output.push_back(static_cast<char>(0xC0u | (codePoint >> 6u)));
++    output.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
++  }
++  else if (codePoint <= 0xFFFFu)
++  {
++    output.push_back(static_cast<char>(0xE0u | (codePoint >> 12u)));
++    output.push_back(static_cast<char>(0x80u | ((codePoint >> 6u) & 0x3Fu)));
++    output.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
++  }
++  else if (codePoint <= 0x10FFFFu)
++  {
++    output.push_back(static_cast<char>(0xF0u | (codePoint >> 18u)));
++    output.push_back(static_cast<char>(0x80u | ((codePoint >> 12u) & 0x3Fu)));
++    output.push_back(static_cast<char>(0x80u | ((codePoint >> 6u) & 0x3Fu)));
++    output.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
++  }
++  else
++  {
++    throw std::runtime_error{"Invalid Unicode code point"};
++  }
++}
++
++class JsonReader
++{
++private:
++  std::string_view m_input;
++  std::size_t m_position = 0u;
++
++public:
++  explicit JsonReader(const std::string_view input)
++    : m_input{input}
++  {
++  }
++
++  ParsedManifest parseManifest()
++  {
++    auto manifest = ParsedManifest{};
++
++    expect('{');
++
++    if (consume('}'))
++    {
++      verifyEnd();
++      return manifest;
++    }
++
++    while (true)
++    {
++      const auto key = parseString();
++      expect(':');
++
++      if (key == "wadFileName" && nextTokenIs('"'))
++      {
++        manifest.wadFileName = parseString();
++      }
++      else if (key == "textures" && nextTokenIs('['))
++      {
++        parseTextures(manifest.aliases);
++      }
++      else
++      {
++        skipValue();
++      }
++
++      if (consume('}'))
++      {
++        break;
++      }
++
++      expect(',');
++    }
++
++    verifyEnd();
++    return manifest;
++  }
++
++private:
++  bool atEnd() const
++  {
++    return m_position >= m_input.size();
++  }
++
++  char readRaw()
++  {
++    if (atEnd())
++    {
++      throw std::runtime_error{"Unexpected end of JSON input"};
++    }
++
++    return m_input[m_position++];
++  }
++
++  char peekRaw() const
++  {
++    if (atEnd())
++    {
++      throw std::runtime_error{"Unexpected end of JSON input"};
++    }
++
++    return m_input[m_position];
++  }
++
++  void skipWhitespace()
++  {
++    while (
++      !atEnd()
++      && std::isspace(static_cast<unsigned char>(m_input[m_position])) != 0)
++    {
++      ++m_position;
++    }
++  }
++
++  bool nextTokenIs(const char expected)
++  {
++    skipWhitespace();
++    return !atEnd() && peekRaw() == expected;
++  }
++
++  bool consume(const char expected)
++  {
++    skipWhitespace();
++
++    if (atEnd() || peekRaw() != expected)
++    {
++      return false;
++    }
++
++    ++m_position;
++    return true;
++  }
++
++  void expect(const char expected)
++  {
++    skipWhitespace();
++
++    if (readRaw() != expected)
++    {
++      throw std::runtime_error{"Unexpected JSON token"};
++    }
++  }
++
++  void verifyEnd()
++  {
++    skipWhitespace();
++
++    if (!atEnd())
++    {
++      throw std::runtime_error{"Unexpected data after JSON document"};
++    }
++  }
++
++  static int hexValue(const char character)
++  {
++    if (character >= '0' && character <= '9')
++    {
++      return character - '0';
++    }
++
++    if (character >= 'a' && character <= 'f')
++    {
++      return 10 + character - 'a';
++    }
++
++    if (character >= 'A' && character <= 'F')
++    {
++      return 10 + character - 'A';
++    }
++
++    return -1;
++  }
++
++  std::uint32_t parseHexQuad()
++  {
++    auto value = std::uint32_t{0u};
++
++    for (auto index = 0; index < 4; ++index)
++    {
++      const auto digit = hexValue(readRaw());
++
++      if (digit < 0)
++      {
++        throw std::runtime_error{"Invalid JSON Unicode escape"};
++      }
++
++      value = (value << 4u) | static_cast<std::uint32_t>(digit);
++    }
++
++    return value;
++  }
++
++  std::string parseString()
++  {
++    skipWhitespace();
++
++    if (readRaw() != '"')
++    {
++      throw std::runtime_error{"Expected JSON string"};
++    }
++
++    auto result = std::string{};
++
++    while (true)
++    {
++      const auto character = readRaw();
++
++      if (character == '"')
++      {
++        break;
++      }
++
++      if (static_cast<unsigned char>(character) < 0x20u)
++      {
++        throw std::runtime_error{"Unescaped control character in JSON string"};
++      }
++
++      if (character != '\\')
++      {
++        result.push_back(character);
++        continue;
++      }
++
++      const auto escape = readRaw();
++
++      switch (escape)
++      {
++      case '"':
++        result.push_back('"');
++        break;
++      case '\\':
++        result.push_back('\\');
++        break;
++      case '/':
++        result.push_back('/');
++        break;
++      case 'b':
++        result.push_back('\b');
++        break;
++      case 'f':
++        result.push_back('\f');
++        break;
++      case 'n':
++        result.push_back('\n');
++        break;
++      case 'r':
++        result.push_back('\r');
++        break;
++      case 't':
++        result.push_back('\t');
++        break;
++      case 'u':
++      {
++        auto codePoint = parseHexQuad();
++
++        if (codePoint >= 0xD800u && codePoint <= 0xDBFFu)
++        {
++          if (readRaw() != '\\' || readRaw() != 'u')
++          {
++            throw std::runtime_error{"Missing low Unicode surrogate"};
++          }
++
++          const auto lowSurrogate = parseHexQuad();
++
++          if (lowSurrogate < 0xDC00u || lowSurrogate > 0xDFFFu)
++          {
++            throw std::runtime_error{"Invalid low Unicode surrogate"};
++          }
++
++          codePoint =
++            0x10000u
++            + ((codePoint - 0xD800u) << 10u)
++            + (lowSurrogate - 0xDC00u);
++        }
++        else if (codePoint >= 0xDC00u && codePoint <= 0xDFFFu)
++        {
++          throw std::runtime_error{"Unexpected low Unicode surrogate"};
++        }
++
++        appendUtf8(result, codePoint);
++        break;
++      }
++      default:
++        throw std::runtime_error{"Invalid JSON string escape"};
++      }
++    }
++
++    return result;
++  }
++
++  void parseTextures(AliasMap& aliases)
++  {
++    expect('[');
++
++    if (consume(']'))
++    {
++      return;
++    }
++
++    while (true)
++    {
++      if (nextTokenIs('{'))
++      {
++        parseTexture(aliases);
++      }
++      else
++      {
++        skipValue();
++      }
++
++      if (consume(']'))
++      {
++        break;
++      }
++
++      expect(',');
++    }
++  }
++
++  void parseTexture(AliasMap& aliases)
++  {
++    expect('{');
++
++    auto displayName = std::optional<std::string>{};
++    auto internalName = std::optional<std::string>{};
++
++    if (!consume('}'))
++    {
++      while (true)
++      {
++        const auto key = parseString();
++        expect(':');
++
++        if (key == "displayName" && nextTokenIs('"'))
++        {
++          displayName = parseString();
++        }
++        else if (key == "internalName" && nextTokenIs('"'))
++        {
++          internalName = parseString();
++        }
++        else
++        {
++          skipValue();
++        }
++
++        if (consume('}'))
++        {
++          break;
++        }
++
++        expect(',');
++      }
++    }
++
++    if (
++      displayName.has_value() && internalName.has_value()
++      && !displayName->empty() && !internalName->empty()
++      && internalName->size() <= 16u)
++    {
++      aliases[asciiLower(*internalName)] = std::move(*displayName);
++    }
++  }
++
++  void skipValue()
++  {
++    skipWhitespace();
++
++    const auto token = peekRaw();
++
++    switch (token)
++    {
++    case '"':
++      static_cast<void>(parseString());
++      return;
++    case '{':
++      skipObject();
++      return;
++    case '[':
++      skipArray();
++      return;
++    case 't':
++      skipLiteral("true");
++      return;
++    case 'f':
++      skipLiteral("false");
++      return;
++    case 'n':
++      skipLiteral("null");
++      return;
++    default:
++      skipNumber();
++      return;
++    }
++  }
++
++  void skipObject()
++  {
++    expect('{');
++
++    if (consume('}'))
++    {
++      return;
++    }
++
++    while (true)
++    {
++      static_cast<void>(parseString());
++      expect(':');
++      skipValue();
++
++      if (consume('}'))
++      {
++        break;
++      }
++
++      expect(',');
++    }
++  }
++
++  void skipArray()
++  {
++    expect('[');
++
++    if (consume(']'))
++    {
++      return;
++    }
++
++    while (true)
++    {
++      skipValue();
++
++      if (consume(']'))
++      {
++        break;
++      }
++
++      expect(',');
++    }
++  }
++
++  void skipLiteral(const std::string_view literal)
++  {
++    skipWhitespace();
++
++    if (
++      m_position + literal.size() > m_input.size()
++      || m_input.substr(m_position, literal.size()) != literal)
++    {
++      throw std::runtime_error{"Invalid JSON literal"};
++    }
++
++    m_position += literal.size();
++  }
++
++  void skipDigits()
++  {
++    const auto start = m_position;
++
++    while (
++      !atEnd()
++      && std::isdigit(static_cast<unsigned char>(m_input[m_position])) != 0)
++    {
++      ++m_position;
++    }
++
++    if (start == m_position)
++    {
++      throw std::runtime_error{"Invalid JSON number"};
++    }
++  }
++
++  void skipNumber()
++  {
++    skipWhitespace();
++
++    if (consume('-'))
++    {
++    }
++
++    if (atEnd())
++    {
++      throw std::runtime_error{"Invalid JSON number"};
++    }
++
++    if (peekRaw() == '0')
++    {
++      ++m_position;
++    }
++    else
++    {
++      skipDigits();
++    }
++
++    if (!atEnd() && peekRaw() == '.')
++    {
++      ++m_position;
++      skipDigits();
++    }
++
++    if (!atEnd() && (peekRaw() == 'e' || peekRaw() == 'E'))
++    {
++      ++m_position;
++
++      if (!atEnd() && (peekRaw() == '+' || peekRaw() == '-'))
++      {
++        ++m_position;
++      }
++
++      skipDigits();
++    }
++  }
++};
++
++AliasMap readAliasManifest(
++  const std::filesystem::path& manifestPath,
++  const std::filesystem::path& wadPath)
++{
++  auto stream = std::ifstream{manifestPath, std::ios::binary};
++
++  if (!stream)
++  {
++    return {};
++  }
++
++  const auto json = std::string{
++    std::istreambuf_iterator<char>{stream},
++    std::istreambuf_iterator<char>{}};
++
++  try
++  {
++    auto manifest = JsonReader{json}.parseManifest();
++
++    if (
++      !manifest.wadFileName.has_value()
++      || asciiLower(*manifest.wadFileName)
++           != asciiLower(wadPath.filename().string()))
++    {
++      return {};
++    }
++
++    return manifest.aliases;
++  }
++  catch (const std::exception&)
++  {
++    return {};
++  }
++}
++
++struct CacheEntry
++{
++  std::filesystem::file_time_type lastWriteTime;
++  AliasMap aliases;
++};
++
++std::mutex g_cacheMutex;
++std::unordered_map<std::string, CacheEntry> g_cache;
++
++std::string cacheKey(const std::filesystem::path& path)
++{
++  return asciiLower(path.lexically_normal().generic_string());
++}
++
++} // namespace
++
++std::optional<std::string> wadForgeDisplayName(
++  const std::filesystem::path& wadPath, const std::string& internalName)
++{
++  if (wadPath.empty() || internalName.empty())
++  {
++    return std::nullopt;
++  }
++
++  auto manifestPath = wadPath;
++  manifestPath += ".wadforge.json";
++
++  auto error = std::error_code{};
++  const auto lastWriteTime = std::filesystem::last_write_time(manifestPath, error);
++
++  if (error)
++  {
++    return std::nullopt;
++  }
++
++  const auto key = cacheKey(manifestPath);
++  const auto normalizedInternalName = asciiLower(internalName);
++
++  auto lock = std::lock_guard<std::mutex>{g_cacheMutex};
++  auto cacheIt = g_cache.find(key);
++
++  if (
++    cacheIt == g_cache.end()
++    || cacheIt->second.lastWriteTime != lastWriteTime)
++  {
++    auto aliases = readAliasManifest(manifestPath, wadPath);
++
++    cacheIt = g_cache
++                .insert_or_assign(
++                  key,
++                  CacheEntry{
++                    lastWriteTime,
++                    std::move(aliases),
++                  })
++                .first;
++  }
++
++  const auto aliasIt = cacheIt->second.aliases.find(normalizedInternalName);
++
++  if (aliasIt == cacheIt->second.aliases.end())
++  {
++    return std::nullopt;
++  }
++
++  return aliasIt->second;
++}
++
++} // namespace tb::mdl
+\ No newline at end of file
+diff --git a/lib/TbUiLib/src/MaterialBrowserView.cpp b/lib/TbUiLib/src/MaterialBrowserView.cpp
+index 86a2d6b..10e4ca1 100644
+--- a/lib/TbUiLib/src/MaterialBrowserView.cpp
++++ b/lib/TbUiLib/src/MaterialBrowserView.cpp
+@@ -197,7 +197,10 @@ void MaterialBrowserView::addMaterialToLayout(
+ {
+   const auto maxCellWidth = layout.maxCellWidth();
+
+-  const auto materialName = std::filesystem::path{material.name()}.filename().string();
++  const auto materialName =
++    material.displayName() == material.name()
++      ? std::filesystem::path{material.name()}.filename().string()
++      : material.displayName();
+   const auto titleHeight = fontManager().font(font).measure(materialName).y();
+
+   const auto scaleFactor = pref(Preferences::MaterialBrowserIconSize);
+@@ -264,7 +267,8 @@ std::vector<const gl::Material*> MaterialBrowserView::filterMaterials(
+     std::erase_if(materials, [&](const auto* material) {
+       return std::ranges::none_of(
+         kdl::str_split(m_filterText, " "), [&](const auto& pattern) {
+-          return kdl::ci::str_contains(material->name(), pattern);
++          return kdl::ci::str_contains(material->displayName(), pattern)
++                 || kdl::ci::str_contains(material->name(), pattern);
+         });
+     });
+   }
+@@ -275,7 +279,7 @@ std::vector<const gl::Material*> MaterialBrowserView::sortMaterials(
+   std::vector<const gl::Material*> materials) const
+ {
+   const auto compareNames = [](const auto& lhs, const auto& rhs) {
+-    return kdl::ci::string_less{}(lhs->name(), rhs->name());
++    return kdl::ci::string_less{}(lhs->displayName(), rhs->displayName());
+   };
+
+   switch (m_sortOrder)
+@@ -454,7 +458,15 @@ QString MaterialBrowserView::tooltip(const Cell& cell)
+
+   auto tooltip = QString{};
+   auto ss = QTextStream{&tooltip};
+-  ss << QString::fromStdString(material.name()) << "\n";
++  ss << QString::fromStdString(material.displayName());
++
++  if (material.displayName() != material.name())
++  {
++    ss << "\nInternal WAD name: "
++       << QString::fromStdString(material.name());
++  }
++
++  ss << "\n";
+
+   if (const auto* texture = material.texture())
+   {
+@@ -483,10 +495,22 @@ void MaterialBrowserView::doContextMenu(
+
+     menu.addSeparator();
+
+-    menu.addAction(tr("Copy Name"), this, [&, material = &cellData(*cell)]() {
+-      auto* clipboard = QApplication::clipboard();
+-      clipboard->setText(QString::fromStdString(material->name()));
+-    });
++    menu.addAction(
++      tr("Copy Display Name"), this, [&, material = &cellData(*cell)]() {
++        auto* clipboard = QApplication::clipboard();
++        clipboard->setText(QString::fromStdString(material->displayName()));
++      });
++
++    if (cellData(*cell).displayName() != cellData(*cell).name())
++    {
++      menu.addAction(
++        tr("Copy Internal WAD Name"),
++        this,
++        [&, material = &cellData(*cell)]() {
++          auto* clipboard = QApplication::clipboard();
++          clipboard->setText(QString::fromStdString(material->name()));
++        });
++    }
+
+     menu.exec(event->globalPos());
+   }

@@ -1,0 +1,62 @@
+# .NET and Visual Studio
+.vs/
+**/bin/
+**/obj/
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Native and CMake build output
+build/
+out/
+artifacts/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+vcpkg_installed/
+*.pdb
+*.ilk
+*.obj
+*.lib
+*.exp
+
+# Local publication and release output
+dist/
+Releases/
+*.zip
+*.7z
+
+# Local diagnostics and backups
+backups/
+TransferPackages/
+reports/
+logs/
+temp/
+tmp/
+
+# User-created game content
+*.wad
+*.map
+*.bsp
+*.lit
+*.prt
+*.pts
+*.lin
+*.vis
+*.aas
+
+# Project images and icons are permitted when intentionally added.
+
+# Compiled binaries
+*.exe
+*.dll
+*.app
+*.dylib
+*.so
+
+# Operating-system files
+Thumbs.db
+Desktop.ini
+.DS_Store

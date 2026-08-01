@@ -1,0 +1,30 @@
+name: Build WadForge
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install .NET 9 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.316
+
+      - name: Restore
+        run: dotnet restore .\WadForge.sln
+
+      - name: Build
+        run: dotnet build .\WadForge.sln --configuration Release --no-restore
