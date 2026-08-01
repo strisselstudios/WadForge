@@ -25,15 +25,15 @@ The WadForge-compatible TrenchBroom build displays the long alias in its materia
 
 Ready-to-run packages are published under the repository's Releases page:
 
-`https://github.com/strisselstudios/WadForge/releases`
+https://github.com/strisselstudios/WadForge/releases
 
-The full suite release contains:
+Choose one of these packages:
 
-- WadForge
-- TrenchBroom Companion
-- WadForge-compatible TrenchBroom
-- Licenses, notices, patch, and checksums
+- WadForge-Only-Windows-x64-v1.0.0.zip - WadForge only, for image/WAD conversion and extraction.
+- WadForge-TrenchBroom-Suite-v1.0.0.zip - complete suite with WadForge, TrenchBroom Companion, and the compatible TrenchBroom build.
+- WadForge-TrenchBroom-Source-v1.0.0.zip - corresponding source package.
 
+Use the complete suite when long texture names must appear inside TrenchBroom.
 ## Basic use
 
 1. Extract the complete release ZIP.
