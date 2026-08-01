@@ -19,7 +19,6 @@ Keep each manifest beside the exact WAD that TrenchBroom loads:
 
     ExampleLongWadName.wad
     ExampleLongWadName.wad.wadforge.json
-
 The WadForge-compatible TrenchBroom build displays the long alias in its material browser while preserving the short internal identifier in WAD and MAP data. Official unmodified TrenchBroom builds display only the internal identifier.
 
 ## Downloads
