@@ -1,6 +1,5 @@
 # WadForge
-
-WadForge is a Windows desktop texture utility for creating and extracting Quake-family WAD texture archives. The repository also contains TrenchBroom Companion and the source patch used by the WadForge-compatible TrenchBroom build.
+WadForge is a Windows desktop texture utility for creating and extracting Quake-family WAD texture archives (WAD2/WAD3). This repository also contains TrenchBroom Companion and the source patch used by the WadForge-compatible TrenchBroom build.
 
 ## Main features
 
@@ -14,13 +13,13 @@ WadForge is a Windows desktop texture utility for creating and extracting Quake-
 
 ## Long texture names
 
-WAD directory identifiers remain limited to 16 characters. WadForge stores the full display names in a sidecar manifest.
+WAD directory identifiers are limited to 16 characters. WadForge stores the full display names in a sidecar manifest.
 
 Keep each manifest beside the exact WAD that TrenchBroom loads:
 
 ```text
-MinecraftBlocks.wad
-MinecraftBlocks.wad.wadforge.json
+ExampleLongWadName.wad
+ExampleLongWadName.wad.wadforge.json
 ```
 
 The WadForge-compatible TrenchBroom build displays the long alias in its material browser while preserving the short internal identifier in WAD and MAP data. Official unmodified TrenchBroom builds display only the internal identifier.
