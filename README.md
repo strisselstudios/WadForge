@@ -1,6 +1,16 @@
 # WadForge
 WadForge is a Windows desktop texture utility for creating and extracting Quake-family WAD texture archives (WAD2/WAD3). This repository also contains TrenchBroom Companion and the source patch used by the WadForge-compatible TrenchBroom build.
 
+
+Download options and instructions
+
+<img width="1095" height="333" alt="Download Options" src="https://github.com/user-attachments/assets/2ca7f00f-dd14-4846-85c1-4f5d573cd215" />
+[WadForge info/instructions]([url](https://github.com/strisselstudios/WadForge/wiki/WadForge-info-and-instructions))
+Explains how to download, extract, configure, and use WadForge by itself.
+
+[Full TrenchBroom Companion App + WadForge info/instructions]([url](https://github.com/strisselstudios/WadForge/wiki/Full-TrenchBroom-Companion-App---WadForge-info-and-instructions))
+Explains how to download, extract, configure, and use WadForge, TrenchBroom Companion, and the included compatible TrenchBroom build.
+
 ## Main features
 
 - Batch PNG, JPG, BMP, and supported image conversion to WAD2 or WAD3.
