@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 - 2026-08-02
+
+- Removed development-section and implementation-status notes from the WadForge interface.
+- Replaced the remaining mode-selection development message with a neutral ready status.
+- Rebuilt the standalone WadForge and complete-suite packages from the corrected source.
+- No TrenchBroom Companion or TrenchBroom behavior changed in this hotfix.
+
 ## 1.0.0
 
 ### WadForge
