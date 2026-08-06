@@ -44,9 +44,9 @@ https://github.com/strisselstudios/WadForge/releases
 
 Choose one of these packages:
 
-- WadForge-Only-Windows-x64-v1.0.1.zip - WadForge only, for image/WAD conversion and extraction.
-- WadForge-TrenchBroom-Suite-v1.0.1.zip - complete suite with WadForge, TrenchBroom Companion, and the compatible TrenchBroom build.
-- WadForge-TrenchBroom-Source-v1.0.1.zip - corresponding source package.
+- WadForge-Only-Windows-x64-v1.0.2.zip - WadForge only, for image/WAD conversion and extraction.
+- WadForge-TrenchBroom-Suite-v1.0.2.zip - complete suite with WadForge, TrenchBroom Companion, and the compatible TrenchBroom build.
+- WadForge-TrenchBroom-Source-v1.0.2.zip - corresponding source package.
 
 Use the complete suite when long texture names must appear inside TrenchBroom.
 ## Basic use
