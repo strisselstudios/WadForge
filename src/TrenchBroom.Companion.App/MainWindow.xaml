@@ -1,0 +1,344 @@
+<Window x:Class="TrenchBroom.Companion.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="TrenchBroom Companion by Strissel" Icon="Assets/TrenchBroom-Companion.ico" Width="1180" Height="760" WindowStartupLocation="CenterScreen" ResizeMode="CanResize" Background="#12151A" Foreground="#FFFFFF" AllowDrop="True" DragEnter="Window_DragEnter" DragOver="Window_DragEnter" Drop="Window_Drop">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#1D2229" />
+
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#343C47" />
+
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#BEC6D1" />
+
+        <SolidColorBrush x:Key="AccentBrush" Color="#D7A43A" />
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+
+            <Setter Property="Background" Value="#15191F" />
+
+            <Setter Property="BorderBrush" Value="#56616E" />
+
+            <Setter Property="CaretBrush" Value="#FFFFFF" />
+
+            <Setter Property="SelectionBrush" Value="#8A6827" />
+
+            <Setter Property="Padding" Value="9,7" />
+
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+
+        <Style x:Key="DarkButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+
+            <Setter Property="Background" Value="#303842" />
+
+            <Setter Property="BorderBrush" Value="#56616E" />
+
+            <Setter Property="BorderThickness" Value="1" />
+
+            <Setter Property="Padding" Value="15,8" />
+
+            <Setter Property="MinHeight" Value="38" />
+
+            <Setter Property="Margin" Value="0,0,10,0" />
+
+            <Setter Property="FontSize" Value="14" />
+
+            <Setter Property="FontWeight" Value="SemiBold" />
+
+            <Setter Property="Cursor" Value="Hand" />
+
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#414B58" />
+                            </Trigger>
+
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#232A32" />
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#20252C" />
+
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#343B44" />
+
+                                <Setter Property="Foreground" Value="#727B87" />
+
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource DarkButtonStyle}">
+            <Setter Property="Background" Value="#946A18" />
+
+            <Setter Property="BorderBrush" Value="#D7A43A" />
+        </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="#15191F" />
+
+            <Setter Property="Foreground" Value="#FFFFFF" />
+
+            <Setter Property="BorderBrush" Value="#343C47" />
+
+            <Setter Property="BorderThickness" Value="1" />
+
+            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+
+            <Setter Property="HorizontalGridLinesBrush" Value="#303741" />
+
+            <Setter Property="RowBackground" Value="#171C22" />
+
+            <Setter Property="AlternatingRowBackground" Value="#1C222A" />
+
+            <Setter Property="SelectionMode" Value="Extended" />
+
+            <Setter Property="SelectionUnit" Value="FullRow" />
+
+            <Setter Property="CanUserAddRows" Value="False" />
+
+            <Setter Property="CanUserDeleteRows" Value="False" />
+
+            <Setter Property="CanUserResizeRows" Value="False" />
+
+            <Setter Property="AutoGenerateColumns" Value="False" />
+
+            <Setter Property="HeadersVisibility" Value="Column" />
+
+            <Setter Property="RowHeaderWidth" Value="0" />
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#2B323B" />
+
+            <Setter Property="Foreground" Value="#FFFFFF" />
+
+            <Setter Property="BorderBrush" Value="#424B57" />
+
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+
+            <Setter Property="Padding" Value="10,9" />
+
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style TargetType="DataGridRow">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+
+            <Setter Property="MinHeight" Value="34" />
+
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#55431E" />
+
+                    <Setter Property="Foreground" Value="#FFFFFF" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+
+            <Setter Property="BorderThickness" Value="0" />
+
+            <Setter Property="Padding" Value="9,5" />
+
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#55431E" />
+
+                    <Setter Property="Foreground" Value="#FFFFFF" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DataGridTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+
+            <Setter Property="VerticalAlignment" Value="Center" />
+
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel>
+                <TextBlock FontSize="32" FontWeight="Bold" Text="TrenchBroom Companion by Strissel" />
+
+                <TextBlock Margin="0,5,0,0" Foreground="{StaticResource SecondaryTextBrush}" FontSize="15" Text="Validate WadForge aliases and launch the selected TrenchBroom installation." />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+
+
+                <TextBlock Margin="0,3,0,0" Foreground="{StaticResource SecondaryTextBrush}" Text="Registration and launch control" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Padding="16" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="10" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel>
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Text="TrenchBroom installation" />
+
+                        <TextBlock x:Name="InstallationStatusText" Margin="0,5,0,0" Foreground="{StaticResource SecondaryTextBrush}" Text="No TrenchBroom executable selected." />
+                    </StackPanel>
+
+                    <Button Grid.Column="1" Style="{StaticResource DarkButtonStyle}" Margin="16,0,0,0" VerticalAlignment="Center" Click="SelectInstallation_Click" Content="Select Installation" />
+                </Grid>
+
+                <TextBox x:Name="InstallationPathTextBox" Grid.Row="2" IsReadOnly="True" Text="No installation selected" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="4" Padding="12" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock FontSize="17" FontWeight="SemiBold" Text="Registered WAD archives" />
+
+                    <TextBlock Margin="0,4,0,0" Foreground="{StaticResource SecondaryTextBrush}" Text="Add WAD files with the button, or drag WAD files and folders directly into this window." />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Style="{StaticResource DarkButtonStyle}" Click="AddWads_Click" Content="Add WAD Files" />
+
+                    <Button x:Name="RefreshButton" Style="{StaticResource DarkButtonStyle}" IsEnabled="False" Click="RefreshRegistrations_Click" Content="Refresh" />
+
+                    <Button x:Name="OpenFolderButton" Style="{StaticResource DarkButtonStyle}" IsEnabled="False" Click="OpenSelectedFolder_Click" Content="Open Folder" />
+
+                    <Button x:Name="RemoveButton" Style="{StaticResource DarkButtonStyle}" Margin="0" IsEnabled="False" Click="RemoveSelected_Click" Content="Remove Selected" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="6" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
+            <Grid>
+                <DataGrid x:Name="RegistrationGrid" ItemsSource="{Binding RegisteredWads}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" SelectionChanged="RegistrationGrid_SelectionChanged">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Width="220" Header="WAD file" Binding="{Binding WadFileName}">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextStyle}">
+                                    <Setter Property="ToolTip" Value="{Binding WadPath}" />
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
+                        <DataGridTextColumn Width="75" Header="Format" Binding="{Binding WadFormat}">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextStyle}" />
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
+                        <DataGridTextColumn Width="85" Header="Textures" Binding="{Binding TextureCountText}">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextStyle}" />
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
+                        <DataGridTextColumn Width="250" Header="Alias manifest" Binding="{Binding ManifestFileName}">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextStyle}">
+                                    <Setter Property="ToolTip" Value="{Binding ManifestPath}" />
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
+                        <DataGridTextColumn Width="75" Header="Aliases" Binding="{Binding AliasCountText}">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextStyle}" />
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
+                        <DataGridTextColumn Width="*" MinWidth="330" Header="Validation" Binding="{Binding Validation}">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridTextStyle}">
+                                    <Setter Property="Foreground" Value="#D5DCE5" />
+
+                                    <Setter Property="ToolTip" Value="{Binding Validation}" />
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <Border x:Name="EmptyRegistrationPanel" Margin="24" Background="#12161B" BorderBrush="#4A5563" BorderThickness="1" CornerRadius="5" IsHitTestVisible="False">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock HorizontalAlignment="Center" FontSize="20" FontWeight="SemiBold" Text="No WAD archives registered" />
+
+                        <TextBlock Margin="0,8,0,0" HorizontalAlignment="Center" Foreground="{StaticResource SecondaryTextBrush}" Text="Drag WAD files or folders here, or use Add WAD Files." />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="8" Padding="15" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock x:Name="RegistrationCountText" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" Text="0 registered WADs" />
+
+                    <TextBlock x:Name="StatusText" Margin="0,5,0,0" Foreground="{StaticResource SecondaryTextBrush}" Text="Select a TrenchBroom installation and register WAD files." />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Style="{StaticResource DarkButtonStyle}" Click="OpenWadForge_Click" Content="Open WadForge" />
+
+                    <Button x:Name="LaunchButton" Style="{StaticResource PrimaryButtonStyle}" Margin="0" MinWidth="170" IsEnabled="False" Click="LaunchTrenchBroom_Click" Content="Launch TrenchBroom" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

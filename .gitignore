@@ -60,3 +60,20 @@ tmp/
 Thumbs.db
 Desktop.ini
 .DS_Store
+# Source project directories whose names resemble ignored file extensions.
+# These exceptions must remain after the broad *.app and *.wad rules.
+!src/WadForge.App/
+!src/WadForge.App/**
+!src/WadForge.Wad/
+!src/WadForge.Wad/**
+!src/TrenchBroom.Companion.App/
+!src/TrenchBroom.Companion.App/**
+
+# Re-ignore generated output inside the unignored source projects.
+# The ** exceptions above would otherwise make these folders trackable.
+/src/WadForge.App/bin/
+/src/WadForge.App/obj/
+/src/WadForge.Wad/bin/
+/src/WadForge.Wad/obj/
+/src/TrenchBroom.Companion.App/bin/
+/src/TrenchBroom.Companion.App/obj/

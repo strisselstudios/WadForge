@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>TrenchBroom-Companion</AssemblyName>
+    <RootNamespace>TrenchBroom.Companion.App</RootNamespace>
+    <ApplicationIcon>Assets\TrenchBroom-Companion.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\TrenchBroom-Companion.ico" />
+    <Resource Include="Assets\TrenchBroom-Companion.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TrenchBroom.Companion.Core\TrenchBroom.Companion.Core.csproj" />
+  </ItemGroup>
+</Project>

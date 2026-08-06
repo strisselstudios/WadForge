@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>WadForge</AssemblyName>
+    <RootNamespace>WadForge.App</RootNamespace>
+    <ApplicationIcon>Assets\Wad-Forge.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\Wad-Forge.ico" />
+    <Resource Include="Assets\Wad-Forge.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WadForge.Core\WadForge.Core.csproj" />
+    <ProjectReference Include="..\WadForge.Imaging\WadForge.Imaging.csproj" />
+    <ProjectReference Include="..\WadForge.Wad\WadForge.Wad.csproj" />
+    <ProjectReference Include="..\WadForge.Aliases\WadForge.Aliases.csproj" />
+  </ItemGroup>
+</Project>

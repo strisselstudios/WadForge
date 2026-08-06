@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WadForge.Core\WadForge.Core.csproj" />
+    <ProjectReference Include="..\WadForge.Imaging\WadForge.Imaging.csproj" />
+    <ProjectReference Include="..\WadForge.Aliases\WadForge.Aliases.csproj" />
+  </ItemGroup>
+</Project>
