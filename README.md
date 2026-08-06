@@ -30,8 +30,10 @@ WAD directory identifiers are limited to 16 characters. WadForge stores the full
 
 Keep each manifest beside the exact WAD that TrenchBroom loads:
 
-    ExampleLongWadName.wad
-    ExampleLongWadName.wad.wadforge.json
+`
+ExampleLongWadName.wad
+ExampleLongWadName.wad.wadforge.json
+`
 The WadForge-compatible TrenchBroom build displays the long alias in its material browser while preserving the short internal identifier in WAD and MAP data. Official unmodified TrenchBroom builds display only the internal identifier.
 
 ## Downloads
@@ -42,9 +44,9 @@ https://github.com/strisselstudios/WadForge/releases
 
 Choose one of these packages:
 
-- WadForge-Only-Windows-x64-v1.0.0.zip - WadForge only, for image/WAD conversion and extraction.
-- WadForge-TrenchBroom-Suite-v1.0.0.zip - complete suite with WadForge, TrenchBroom Companion, and the compatible TrenchBroom build.
-- WadForge-TrenchBroom-Source-v1.0.0.zip - corresponding source package.
+- WadForge-Only-Windows-x64-v1.0.1.zip - WadForge only, for image/WAD conversion and extraction.
+- WadForge-TrenchBroom-Suite-v1.0.1.zip - complete suite with WadForge, TrenchBroom Companion, and the compatible TrenchBroom build.
+- WadForge-TrenchBroom-Source-v1.0.1.zip - corresponding source package.
 
 Use the complete suite when long texture names must appear inside TrenchBroom.
 ## Basic use
