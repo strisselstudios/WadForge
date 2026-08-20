@@ -183,6 +183,8 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="14" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="12" />
             <RowDefinition Height="*" />
             <RowDefinition Height="12" />
@@ -198,17 +200,50 @@
             <StackPanel>
                 <TextBlock FontSize="32" FontWeight="Bold" Text="TrenchBroom Companion by Strissel" />
 
-                <TextBlock Margin="0,5,0,0" Foreground="{StaticResource SecondaryTextBrush}" FontSize="15" Text="Validate WadForge aliases and launch the selected TrenchBroom installation." />
             </StackPanel>
 
             <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
 
 
-                <TextBlock Margin="0,3,0,0" Foreground="{StaticResource SecondaryTextBrush}" Text="Registration and launch control" />
             </StackPanel>
         </Grid>
 
         <Border Grid.Row="2" Padding="16" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="SemiBold" Text="PROJECT" />
+                    <TextBlock x:Name="ProjectNameText" Margin="0,4,0,0" FontSize="20" FontWeight="SemiBold" Text="No project open" />
+                    <TextBlock x:Name="ProjectDetailsText" Margin="0,5,0,0" Foreground="{StaticResource SecondaryTextBrush}" Text="Create or open a project to begin." />
+                    <TextBlock x:Name="ProjectLocationText" Margin="0,4,0,0" MaxWidth="620" Foreground="#87919D" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Margin="22,0,0,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <ComboBox x:Name="ProjectGameComboBox" Width="125" Height="38" Margin="0,0,10,0" SelectedIndex="0" VerticalContentAlignment="Center">
+                            <ComboBoxItem Tag="dusk" Content="DUSK" />
+                            <ComboBoxItem Tag="quake" Content="Quake" />
+                            <ComboBoxItem Tag="halflife" Content="Half-Life" />
+                        </ComboBox>
+                        <Button Style="{StaticResource PrimaryButtonStyle}" Click="NewProject_Click" Content="New Project" />
+                        <Button Style="{StaticResource DarkButtonStyle}" Click="OpenProject_Click" Content="Open Project" />
+                        <Button x:Name="CloseProjectButton" Style="{StaticResource DarkButtonStyle}" Margin="0" IsEnabled="False" Click="CloseProject_Click" Content="Close" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,10,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="ImportMapButton" Style="{StaticResource DarkButtonStyle}" IsEnabled="False" Click="ImportMap_Click" Content="Import Map" />
+                        <Button x:Name="OpenProjectFolderButton" Style="{StaticResource DarkButtonStyle}" IsEnabled="False" Click="OpenProjectFolder_Click" Content="Project Folder" />
+                        <Button x:Name="OpenCurrentMapButton" Style="{StaticResource PrimaryButtonStyle}" Margin="0" MinWidth="220" IsEnabled="False" Click="OpenCurrentMap_Click" Content="Open Current Map in TrenchBroom" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="4" Padding="16" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -235,7 +270,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="4" Padding="12" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
+        <Border Grid.Row="6" Padding="12" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -260,7 +295,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="6" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
+        <Border Grid.Row="8" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
             <Grid>
                 <DataGrid x:Name="RegistrationGrid" ItemsSource="{Binding RegisteredWads}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" SelectionChanged="RegistrationGrid_SelectionChanged">
                     <DataGrid.Columns>
@@ -320,7 +355,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="8" Padding="15" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
+        <Border Grid.Row="10" Padding="15" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
