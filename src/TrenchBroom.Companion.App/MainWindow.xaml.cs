@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -38,7 +38,7 @@ public partial class MainWindow : Window
         }
 
         LoadSavedState();
-        SelectBundledTrenchBroomIfAvailable();
+        ResolveTrenchBroomInstallation();
         RefreshInterface();
     }
 
@@ -84,49 +84,36 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SelectBundledTrenchBroomIfAvailable()
+    private void ResolveTrenchBroomInstallation()
     {
-        string bundledExecutablePath =
-            Path.GetFullPath(
-                Path.Combine(
-                    AppContext.BaseDirectory,
-                    "..",
-                    "TrenchBroom",
-                    "TrenchBroom.exe"));
-
-        TrenchBroomInstallationInfo bundledInstallation =
-            TrenchBroomInstallationService.Inspect(
-                bundledExecutablePath);
-
-        if (!bundledInstallation.IsValid ||
-            !bundledInstallation.IsWadForgeCompatible)
-        {
-            return;
-        }
-
-        bool shouldUseBundledInstallation =
-            _installation is null ||
-            !_installation.IsValid ||
-            !_installation.IsWadForgeCompatible ||
-            !File.Exists(_installation.ExecutablePath);
-
-        if (!shouldUseBundledInstallation)
-        {
-            return;
-        }
+        TrenchBroomInstallationResolution resolution =
+            TrenchBroomInstallationResolver.Resolve(
+                _settings.TrenchBroomExecutablePath,
+                AppContext.BaseDirectory);
 
         _installation =
-            bundledInstallation;
+            resolution.Installation;
 
-        _settings.TrenchBroomExecutablePath =
-            bundledInstallation.ExecutablePath;
+        if (_installation is not null &&
+            _installation.IsValid &&
+            !string.Equals(
+                _settings.TrenchBroomExecutablePath,
+                _installation.ExecutablePath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.TrenchBroomExecutablePath =
+                _installation.ExecutablePath;
 
-        SaveSettings();
+            SaveSettings();
+        }
 
-        StatusText.Text =
-            "Bundled WadForge-compatible TrenchBroom selected automatically.";
+        if (!string.IsNullOrWhiteSpace(
+                resolution.Status))
+        {
+            StatusText.Text =
+                resolution.Status;
+        }
     }
-
     private void SelectInstallation_Click(
         object sender,
         RoutedEventArgs e)
