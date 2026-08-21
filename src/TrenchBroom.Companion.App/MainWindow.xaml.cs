@@ -91,6 +91,19 @@ public partial class MainWindow : Window
                 _settings.TrenchBroomExecutablePath,
                 AppContext.BaseDirectory);
 
+        if (resolution.Installation is not null &&
+            resolution.Installation.IsValid &&
+            resolution.Installation.IsWadForgeCompatible)
+        {
+            if (TryUseManagedTrenchBroom(
+                    resolution.Installation,
+                    resolution.Source,
+                    showErrorDialog: false))
+            {
+                return;
+            }
+        }
+
         _installation =
             resolution.Installation;
 
@@ -112,6 +125,97 @@ public partial class MainWindow : Window
         {
             StatusText.Text =
                 resolution.Status;
+        }
+    }
+
+    private bool TryUseManagedTrenchBroom(
+        TrenchBroomInstallationInfo compatibleInstallation,
+        string source,
+        bool showErrorDialog)
+    {
+        try
+        {
+            string sourceExecutablePath =
+                Path.GetFullPath(
+                    compatibleInstallation.ExecutablePath);
+
+            string managedExecutablePath =
+                Path.GetFullPath(
+                    TrenchBroomManagedInstallationService
+                        .DefaultManagedExecutablePath);
+
+            bool alreadyManaged =
+                string.Equals(
+                    sourceExecutablePath,
+                    managedExecutablePath,
+                    StringComparison.OrdinalIgnoreCase);
+
+            TrenchBroomManagedInstallationResult result =
+                TrenchBroomManagedInstallationService.Provision(
+                    sourceExecutablePath);
+
+            _installation =
+                result.Installation;
+
+            _settings.TrenchBroomExecutablePath =
+                result.Installation.ExecutablePath;
+
+            SaveSettings();
+
+            if (alreadyManaged)
+            {
+                StatusText.Text =
+                    "Companion-managed TrenchBroom is ready.";
+            }
+            else
+            {
+                StatusText.Text =
+                    source switch
+                    {
+                        TrenchBroomInstallationResolver.BundledSource =>
+                            "Bundled compatible TrenchBroom was installed into Companion-managed storage.",
+
+                        TrenchBroomInstallationResolver.DiscoveredSource =>
+                            "An existing compatible TrenchBroom was detected and copied into Companion-managed storage.",
+
+                        _ =>
+                            "Your compatible TrenchBroom was copied into Companion-managed storage."
+                    };
+            }
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            _installation =
+                compatibleInstallation;
+
+            _settings.TrenchBroomExecutablePath =
+                compatibleInstallation.ExecutablePath;
+
+            SaveSettings();
+
+            StatusText.Text =
+                "A compatible TrenchBroom was found, but Companion could not create its managed copy. " +
+                "The original installation is still selected.";
+
+            if (showErrorDialog)
+            {
+                MessageBox.Show(
+                    this,
+                    "Companion could not create its managed TrenchBroom installation." +
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    exception.Message +
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    "The original TrenchBroom installation was not changed and remains selected.",
+                    "Managed TrenchBroom Setup",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+
+            return false;
         }
     }
     private void SelectInstallation_Click(
@@ -147,22 +251,11 @@ public partial class MainWindow : Window
             TrenchBroomInstallationService.Inspect(
                 dialog.FileName);
 
-        _installation = inspection;
-
-        if (inspection.IsValid)
+        if (!inspection.IsValid)
         {
-            _settings.TrenchBroomExecutablePath =
-                inspection.ExecutablePath;
+            _installation =
+                inspection;
 
-            SaveSettings();
-
-            StatusText.Text =
-                inspection.IsWadForgeCompatible
-                    ? "WadForge-compatible TrenchBroom installation selected."
-                    : "Standard TrenchBroom selected. Long-name display is not installed yet.";
-        }
-        else
-        {
             StatusText.Text =
                 inspection.Status;
 
@@ -172,7 +265,33 @@ public partial class MainWindow : Window
                 "Invalid TrenchBroom Installation",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+
+            RefreshInterface();
+            return;
         }
+
+        if (inspection.IsWadForgeCompatible)
+        {
+            TryUseManagedTrenchBroom(
+                inspection,
+                "selected",
+                showErrorDialog: true);
+
+            RefreshInterface();
+            return;
+        }
+
+        _installation =
+            inspection;
+
+        _settings.TrenchBroomExecutablePath =
+            inspection.ExecutablePath;
+
+        SaveSettings();
+
+        StatusText.Text =
+            "Standard TrenchBroom selected. Companion did not modify it. " +
+            "The compatible build still needs to be set up for long texture aliases.";
 
         RefreshInterface();
     }
