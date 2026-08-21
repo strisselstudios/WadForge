@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -16,6 +16,8 @@ internal sealed class CompanionNewProjectDialog :
     private readonly TextBox _projectNameTextBox;
 
     private readonly ComboBox _driveComboBox;
+
+    private readonly ComboBox? _textureFormatComboBox;
 
     private readonly TextBlock _targetPathText;
 
@@ -59,6 +61,13 @@ internal sealed class CompanionNewProjectDialog :
                     new Thickness(
                         22)
             };
+
+        root.RowDefinitions.Add(
+            new RowDefinition
+            {
+                Height =
+                    GridLength.Auto
+            });
 
         root.RowDefinitions.Add(
             new RowDefinition
@@ -234,6 +243,139 @@ internal sealed class CompanionNewProjectDialog :
         root.Children.Add(
             drivePanel);
 
+        StackPanel textureFormatPanel =
+            new()
+            {
+                Margin =
+                    new Thickness(
+                        0,
+                        14,
+                        0,
+                        0)
+            };
+
+        textureFormatPanel.Children.Add(
+            new TextBlock
+            {
+                Text =
+                    "Texture archive format",
+
+                Foreground =
+                    new SolidColorBrush(
+                        Color.FromRgb(
+                            190,
+                            198,
+                            209))
+            });
+
+        if (_gameProfile.CanChooseTextureArchiveFormat)
+        {
+            _textureFormatComboBox =
+                new ComboBox
+                {
+                    Margin =
+                        new Thickness(
+                            0,
+                            6,
+                            0,
+                            0),
+
+                    Height =
+                        36,
+
+                    VerticalContentAlignment =
+                        VerticalAlignment.Center
+                };
+
+            foreach (string format in
+                     _gameProfile.SupportedTextureArchiveFormats)
+            {
+                ComboBoxItem item =
+                    new()
+                    {
+                        Content =
+                            BuildTextureFormatLabel(
+                                format),
+
+                        Tag =
+                            format
+                    };
+
+                _textureFormatComboBox.Items.Add(
+                    item);
+
+                if (string.Equals(
+                        format,
+                        _gameProfile.DefaultTextureArchiveFormat,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    _textureFormatComboBox.SelectedItem =
+                        item;
+                }
+            }
+
+            textureFormatPanel.Children.Add(
+                _textureFormatComboBox);
+        }
+        else
+        {
+            _textureFormatComboBox =
+                null;
+
+            textureFormatPanel.Children.Add(
+                new TextBlock
+                {
+                    Margin =
+                        new Thickness(
+                            0,
+                            6,
+                            0,
+                            0),
+
+                    Text =
+                        $"{CompanionTextureArchiveFormats.GetDisplayName(_gameProfile.DefaultTextureArchiveFormat)} — fixed for {_gameProfile.DisplayName}",
+
+                    FontWeight =
+                        FontWeights.SemiBold,
+
+                    Foreground =
+                        Brushes.White
+                });
+        }
+
+        textureFormatPanel.Children.Add(
+            new TextBlock
+            {
+                Margin =
+                    new Thickness(
+                        0,
+                        5,
+                        0,
+                        0),
+
+                Text =
+                    _gameProfile.CanChooseTextureArchiveFormat
+                        ? "DUSK can use WAD2 or WAD3. This sets the default format Companion creates; imported WADs are detected independently."
+                        : "Companion uses the normal texture archive format for this game.",
+
+                TextWrapping =
+                    TextWrapping.Wrap,
+
+                Foreground =
+                    new SolidColorBrush(
+                        Color.FromRgb(
+                            135,
+                            145,
+                            157))
+            });
+
+        Grid.SetRow(
+            textureFormatPanel,
+            3);
+
+        root.Children.Add(
+            textureFormatPanel);
+
         StackPanel targetPanel =
             new()
             {
@@ -285,7 +427,7 @@ internal sealed class CompanionNewProjectDialog :
 
         Grid.SetRow(
             targetPanel,
-            3);
+            4);
 
         root.Children.Add(
             targetPanel);
@@ -354,7 +496,7 @@ internal sealed class CompanionNewProjectDialog :
 
         Grid.SetRow(
             buttons,
-            4);
+            5);
 
         root.Children.Add(
             buttons);
@@ -375,6 +517,9 @@ internal sealed class CompanionNewProjectDialog :
         string.Empty;
 
     public string SelectedDriveRoot { get; private set; } =
+        string.Empty;
+
+    public string SelectedTextureArchiveFormat { get; private set; } =
         string.Empty;
 
     private void PopulateDrives()
@@ -438,6 +583,37 @@ internal sealed class CompanionNewProjectDialog :
                     ? _driveComboBox.Items[0]
                     : null
             );
+    }
+
+    private static string BuildTextureFormatLabel(
+        string format)
+    {
+        return CompanionTextureArchiveFormats.Normalize(
+            format) switch
+        {
+            CompanionTextureArchiveFormats.Wad2 =>
+                "WAD2 — Quake-style",
+
+            CompanionTextureArchiveFormats.Wad3 =>
+                "WAD3 — Half-Life-style",
+
+            _ =>
+                CompanionTextureArchiveFormats.GetDisplayName(
+                    format)
+        };
+    }
+
+    private string GetSelectedTextureArchiveFormat()
+    {
+        if (_textureFormatComboBox?.SelectedItem is
+            ComboBoxItem item &&
+            item.Tag is string selectedFormat)
+        {
+            return CompanionTextureArchiveFormats.Normalize(
+                selectedFormat);
+        }
+
+        return _gameProfile.DefaultTextureArchiveFormat;
     }
 
     private static string FormatBytes(
@@ -614,6 +790,9 @@ internal sealed class CompanionNewProjectDialog :
 
         SelectedDriveRoot =
             selectedDrive;
+
+        SelectedTextureArchiveFormat =
+            GetSelectedTextureArchiveFormat();
 
         DialogResult =
             true;

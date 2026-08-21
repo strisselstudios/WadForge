@@ -33,7 +33,8 @@ public sealed class CompanionProjectCreationService
         CompanionGameProfile gameProfile,
         string selectedDrivePath,
         string gameInstallationDirectory,
-        string projectName)
+        string projectName,
+        string? preferredTextureArchiveFormat = null)
     {
         CompanionProvisionedProject provisioned =
             _provisioner.Provision(
@@ -43,14 +44,16 @@ public sealed class CompanionProjectCreationService
                 projectName);
 
         return FinishCreation(
-            provisioned);
+            provisioned,
+            preferredTextureArchiveFormat);
     }
 
     public CompanionProjectCreationResult CreateAtWorkspaceRoot(
         CompanionGameProfile gameProfile,
         string workspaceRoot,
         string gameInstallationDirectory,
-        string projectName)
+        string projectName,
+        string? preferredTextureArchiveFormat = null)
     {
         CompanionProvisionedProject provisioned =
             _provisioner.ProvisionAtWorkspaceRoot(
@@ -60,11 +63,13 @@ public sealed class CompanionProjectCreationService
                 projectName);
 
         return FinishCreation(
-            provisioned);
+            provisioned,
+            preferredTextureArchiveFormat);
     }
 
     private CompanionProjectCreationResult FinishCreation(
-        CompanionProvisionedProject provisioned)
+        CompanionProvisionedProject provisioned,
+        string? preferredTextureArchiveFormat)
     {
         CompanionProjectSession? session =
             null;
@@ -76,7 +81,8 @@ public sealed class CompanionProjectCreationService
                     provisioned.ProjectDirectory,
                     provisioned.ProjectName,
                     provisioned.GameProfile.Id,
-                    provisioned.ProjectDirectoryName);
+                    provisioned.ProjectDirectoryName,
+                    preferredTextureArchiveFormat);
 
             session.Project.GameBinding =
                 new CompanionProjectGameBinding

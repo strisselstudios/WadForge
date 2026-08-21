@@ -18,7 +18,8 @@ public static class CompanionProjectStore
     public static CompanionProjectManifest Create(
         string name,
         string gameId,
-        string? modName = null)
+        string? modName = null,
+        string? preferredTextureArchiveFormat = null)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -34,14 +35,23 @@ public static class CompanionProjectStore
                 nameof(gameId));
         }
 
+        string normalizedGameId =
+            gameId.Trim().ToLowerInvariant();
+
+        string textureArchiveFormat =
+            ResolveTextureArchiveFormat(
+                normalizedGameId,
+                preferredTextureArchiveFormat);
+
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
         return new CompanionProjectManifest
         {
             ProjectId = Guid.NewGuid(),
             Name = name.Trim(),
-            GameId = gameId.Trim().ToLowerInvariant(),
+            GameId = normalizedGameId,
             ModName = NormalizeOptionalText(modName),
+            PreferredTextureArchiveFormat = textureArchiveFormat,
             CreatedUtc = now,
             UpdatedUtc = now
         };
@@ -302,6 +312,11 @@ public static class CompanionProjectStore
         project.ModName =
             NormalizeOptionalText(project.ModName);
 
+        project.PreferredTextureArchiveFormat =
+            NormalizeProjectTextureArchiveFormat(
+                project.GameId,
+                project.PreferredTextureArchiveFormat);
+
         if (project.GameBinding is not null)
         {
             project.GameBinding.GameInstallationDirectory =
@@ -381,18 +396,132 @@ public static class CompanionProjectStore
 
         if (project.SchemaVersion == 1)
         {
+            project.GameBinding = null;
+            project.SchemaVersion = 2;
+        }
+
+        if (project.SchemaVersion == 2)
+        {
+            project.PreferredTextureArchiveFormat =
+                GetLegacyTextureArchivePreference(
+                    project.GameId);
+
             project.SchemaVersion =
                 CompanionProjectManifest.CurrentSchemaVersion;
 
-            project.GameBinding = null;
+            return;
+        }
+
+        if (project.SchemaVersion == 3)
+        {
+            project.SchemaVersion =
+                CompanionProjectManifest.CurrentSchemaVersion;
+
             return;
         }
 
         throw new InvalidDataException(
             $"Unsupported Companion project schema version " +
             $"'{project.SchemaVersion}'. " +
-            $"Expected version 1 or " +
+            $"Expected version 1, 2, 3, or " +
             $"'{CompanionProjectManifest.CurrentSchemaVersion}'.");
+    }
+
+    private static string? NormalizeProjectTextureArchiveFormat(
+        string gameId,
+        string? preferredTextureArchiveFormat)
+    {
+        if (string.IsNullOrWhiteSpace(
+                preferredTextureArchiveFormat))
+        {
+            if (CompanionGameProfiles.TryGet(
+                    gameId,
+                    out CompanionGameProfile? profile) &&
+                profile is not null)
+            {
+                if (profile.CanChooseTextureArchiveFormat)
+                {
+                    return null;
+                }
+
+                return profile.DefaultTextureArchiveFormat;
+            }
+
+            return null;
+        }
+
+        return ResolveTextureArchiveFormat(
+            gameId,
+            preferredTextureArchiveFormat);
+    }
+
+    private static string? GetLegacyTextureArchivePreference(
+        string? gameId)
+    {
+        if (CompanionGameProfiles.TryGet(
+                gameId,
+                out CompanionGameProfile? profile) &&
+            profile is not null)
+        {
+            return profile.CanChooseTextureArchiveFormat
+                ? null
+                : profile.DefaultTextureArchiveFormat;
+        }
+
+        return null;
+    }
+
+    private static string ResolveTextureArchiveFormat(
+        string gameId,
+        string? preferredTextureArchiveFormat)
+    {
+        string resolved;
+
+        try
+        {
+            resolved =
+                string.IsNullOrWhiteSpace(
+                    preferredTextureArchiveFormat)
+                    ? GetDefaultTextureArchiveFormat(
+                        gameId)
+                    : CompanionTextureArchiveFormats.Normalize(
+                        preferredTextureArchiveFormat);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidDataException(
+                "Companion project contains an unsupported texture archive format.",
+                exception);
+        }
+
+        if (CompanionGameProfiles.TryGet(
+                gameId,
+                out CompanionGameProfile? profile) &&
+            profile is not null &&
+            !profile.SupportsTextureArchiveFormat(
+                resolved))
+        {
+            throw new InvalidDataException(
+                $"Texture archive format " +
+                $"'{CompanionTextureArchiveFormats.GetDisplayName(resolved)}' " +
+                $"is not supported by {profile.DisplayName} projects.");
+        }
+
+        return resolved;
+    }
+
+    private static string GetDefaultTextureArchiveFormat(
+        string? gameId)
+    {
+        if (CompanionGameProfiles.TryGet(
+                gameId,
+                out CompanionGameProfile? profile) &&
+            profile is not null)
+        {
+            return profile.DefaultTextureArchiveFormat;
+        }
+
+        return CompanionTextureArchiveFormats.Wad2;
     }
 
     private static string NormalizeAbsolutePath(

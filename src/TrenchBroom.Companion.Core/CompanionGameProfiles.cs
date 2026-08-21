@@ -1,4 +1,6 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 
 namespace TrenchBroom.Companion.Core;
@@ -15,7 +17,15 @@ public static class CompanionGameProfiles
                 Path.Combine(
                     "SDK",
                     "mnt",
-                    "local"));
+                    "local"),
+            defaultTextureArchiveFormat:
+                CompanionTextureArchiveFormats.Wad2,
+            supportedTextureArchiveFormats:
+                new[]
+                {
+                    CompanionTextureArchiveFormats.Wad2,
+                    CompanionTextureArchiveFormats.Wad3
+                });
 
     public static CompanionGameProfile Quake { get; } =
         new(
@@ -24,7 +34,14 @@ public static class CompanionGameProfiles
             steamAppId: "2310",
             steamCommonDirectoryName: "Quake",
             runtimeModsRelativePath:
-                string.Empty);
+                string.Empty,
+            defaultTextureArchiveFormat:
+                CompanionTextureArchiveFormats.Wad2,
+            supportedTextureArchiveFormats:
+                new[]
+                {
+                    CompanionTextureArchiveFormats.Wad2
+                });
 
     public static CompanionGameProfile HalfLife { get; } =
         new(
@@ -33,7 +50,14 @@ public static class CompanionGameProfiles
             steamAppId: "70",
             steamCommonDirectoryName: "Half-Life",
             runtimeModsRelativePath:
-                string.Empty);
+                string.Empty,
+            defaultTextureArchiveFormat:
+                CompanionTextureArchiveFormats.Wad3,
+            supportedTextureArchiveFormats:
+                new[]
+                {
+                    CompanionTextureArchiveFormats.Wad3
+                });
 
     private static readonly IReadOnlyDictionary<string, CompanionGameProfile>
         ProfilesById =

@@ -2,7 +2,7 @@
 
 public sealed class CompanionProjectManifest
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 4;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -15,6 +15,8 @@ public sealed class CompanionProjectManifest
     public string? ModName { get; set; }
 
     public CompanionProjectGameBinding? GameBinding { get; set; }
+
+    public string? PreferredTextureArchiveFormat { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
 

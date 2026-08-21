@@ -26,6 +26,10 @@ public partial class MainWindow
         _mapImportService =
             new();
 
+    private readonly CompanionProjectMapCreationService
+        _mapCreationService =
+            new();
+
     private readonly CompanionProjectLayout
         _projectLayout =
             new();
@@ -35,6 +39,8 @@ public partial class MainWindow
     private string? _gameInstallationDirectory;
 
     private Button? _gameFolderButton;
+
+    private Button? _newMapButton;
 
     private ComboBox? _mapSelectorComboBox;
 
@@ -114,6 +120,44 @@ public partial class MainWindow
             buttonPanel.Children.Insert(
                 insertionIndex,
                 _mapSelectorComboBox);
+        }
+
+        if (_newMapButton is null)
+        {
+            _newMapButton =
+                new Button
+                {
+                    Content =
+                        "New Map",
+
+                    Style =
+                        FindResource(
+                            "DarkButtonStyle")
+                        as Style,
+
+                    IsEnabled =
+                        false,
+
+                    ToolTip =
+                        "Create a new empty map in this project"
+                };
+
+            _newMapButton.Click +=
+                NewMap_Click;
+
+            int insertionIndex =
+                buttonPanel.Children.IndexOf(
+                    ImportMapButton);
+
+            if (insertionIndex < 0)
+            {
+                insertionIndex =
+                    buttonPanel.Children.Count;
+            }
+
+            buttonPanel.Children.Insert(
+                insertionIndex,
+                _newMapButton);
         }
 
         if (_gameFolderButton is null)
@@ -208,7 +252,8 @@ public partial class MainWindow
                     gameProfile,
                     dialog.SelectedDriveRoot,
                     gameInstallation,
-                    dialog.ProjectName);
+                    dialog.ProjectName,
+                    dialog.SelectedTextureArchiveFormat);
 
             _projectSession =
                 creation.Session;
@@ -327,6 +372,47 @@ public partial class MainWindow
 
         StatusText.Text =
             $"Closed project '{projectName}'.";
+    }
+
+    private void NewMap_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_projectSession is null)
+        {
+            return;
+        }
+
+        CompanionNewMapDialog dialog =
+            new(
+                _projectSession.ProjectDirectory)
+            {
+                Owner =
+                    this
+            };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            string createdMap =
+                _mapCreationService.CreateMap(
+                    _projectSession,
+                    dialog.MapName);
+
+            RefreshProjectInterface();
+
+            StatusText.Text =
+                $"Created map '{Path.GetFileName(createdMap)}'.";
+        }
+        catch (Exception exception)
+        {
+            ShowProjectError(
+                exception.Message);
+        }
     }
 
     private void ImportMap_Click(
@@ -904,6 +990,12 @@ public partial class MainWindow
             ImportMapButton.IsEnabled =
                 false;
 
+            if (_newMapButton is not null)
+            {
+                _newMapButton.IsEnabled =
+                    false;
+            }
+
             OpenProjectFolderButton.IsEnabled =
                 false;
 
@@ -978,8 +1070,15 @@ public partial class MainWindow
         ProjectNameText.Text =
             project.Name;
 
+        string textureArchiveFormat =
+            string.IsNullOrWhiteSpace(
+                project.PreferredTextureArchiveFormat)
+                ? "WAD format: Auto"
+                : CompanionTextureArchiveFormats.GetDisplayName(
+                    project.PreferredTextureArchiveFormat);
+
         ProjectDetailsText.Text =
-            $"{game} | {mapCountText} | Current map: {currentMapText}";
+            $"{game} | {textureArchiveFormat} | {mapCountText} | Current map: {currentMapText}";
 
         ProjectLocationText.Text =
             _projectSession.ProjectDirectory;
@@ -998,6 +1097,12 @@ public partial class MainWindow
 
         ImportMapButton.IsEnabled =
             true;
+
+        if (_newMapButton is not null)
+        {
+            _newMapButton.IsEnabled =
+                true;
+        }
 
         OpenProjectFolderButton.IsEnabled =
             Directory.Exists(

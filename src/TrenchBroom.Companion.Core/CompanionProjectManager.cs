@@ -8,7 +8,8 @@ public sealed class CompanionProjectManager
         string projectDirectory,
         string projectName,
         string gameId,
-        string? modName = null)
+        string? modName = null,
+        string? preferredTextureArchiveFormat = null)
     {
         string directory =
             NormalizeDirectory(projectDirectory);
@@ -30,7 +31,8 @@ public sealed class CompanionProjectManager
             CompanionProjectStore.Create(
                 projectName,
                 gameId,
-                modName);
+                modName,
+                preferredTextureArchiveFormat);
 
         CompanionProjectStore.Save(
             projectFilePath,
@@ -45,7 +47,8 @@ public sealed class CompanionProjectManager
         string mapFilePath,
         string projectName,
         string gameId,
-        string? modName = null)
+        string? modName = null,
+        string? preferredTextureArchiveFormat = null)
     {
         string fullMapPath =
             ValidateExistingMapPath(mapFilePath);
@@ -74,7 +77,8 @@ public sealed class CompanionProjectManager
             CompanionProjectStore.Create(
                 projectName,
                 gameId,
-                modName);
+                modName,
+                preferredTextureArchiveFormat);
 
         CompanionProjectStore.AddMap(
             project,
