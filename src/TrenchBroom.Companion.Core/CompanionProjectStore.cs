@@ -74,6 +74,7 @@ public static class CompanionProjectStore
                 "Companion project file did not contain a valid project.");
         }
 
+        MigrateToCurrentSchema(project);
         NormalizeAndValidate(project);
 
         return project;
@@ -301,6 +302,19 @@ public static class CompanionProjectStore
         project.ModName =
             NormalizeOptionalText(project.ModName);
 
+        if (project.GameBinding is not null)
+        {
+            project.GameBinding.GameInstallationDirectory =
+                NormalizeAbsolutePath(
+                    project.GameBinding.GameInstallationDirectory,
+                    "Game installation directory");
+
+            project.GameBinding.RuntimeModDirectory =
+                NormalizeAbsolutePath(
+                    project.GameBinding.RuntimeModDirectory,
+                    "Runtime mod directory");
+        }
+
         project.Maps ??= new List<CompanionProjectMap>();
 
         HashSet<string> mapPaths =
@@ -353,6 +367,62 @@ public static class CompanionProjectStore
             }
 
             project.ActiveMapPath = activeMapPath;
+        }
+    }
+
+    private static void MigrateToCurrentSchema(
+        CompanionProjectManifest project)
+    {
+        if (project.SchemaVersion ==
+            CompanionProjectManifest.CurrentSchemaVersion)
+        {
+            return;
+        }
+
+        if (project.SchemaVersion == 1)
+        {
+            project.SchemaVersion =
+                CompanionProjectManifest.CurrentSchemaVersion;
+
+            project.GameBinding = null;
+            return;
+        }
+
+        throw new InvalidDataException(
+            $"Unsupported Companion project schema version " +
+            $"'{project.SchemaVersion}'. " +
+            $"Expected version 1 or " +
+            $"'{CompanionProjectManifest.CurrentSchemaVersion}'.");
+    }
+
+    private static string NormalizeAbsolutePath(
+        string path,
+        string description)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new InvalidDataException(
+                $"{description} cannot be empty.");
+        }
+
+        string trimmed =
+            path.Trim();
+
+        if (!Path.IsPathFullyQualified(trimmed))
+        {
+            throw new InvalidDataException(
+                $"{description} must be an absolute path.");
+        }
+
+        try
+        {
+            return Path.GetFullPath(trimmed);
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidDataException(
+                $"{description} is not a valid path.",
+                exception);
         }
     }
 

@@ -66,14 +66,29 @@ public sealed class CompanionProjectCreationService
     private CompanionProjectCreationResult FinishCreation(
         CompanionProvisionedProject provisioned)
     {
+        CompanionProjectSession? session =
+            null;
+
         try
         {
-            CompanionProjectSession session =
+            session =
                 _projectManager.Create(
                     provisioned.ProjectDirectory,
                     provisioned.ProjectName,
                     provisioned.GameProfile.Id,
                     provisioned.ProjectDirectoryName);
+
+            session.Project.GameBinding =
+                new CompanionProjectGameBinding
+                {
+                    GameInstallationDirectory =
+                        provisioned.GameInstallationDirectory,
+
+                    RuntimeModDirectory =
+                        provisioned.RuntimeModDirectory
+                };
+
+            session.Save();
 
             return new CompanionProjectCreationResult(
                 session,
@@ -81,6 +96,12 @@ public sealed class CompanionProjectCreationService
         }
         catch
         {
+            if (session is not null)
+            {
+                TryDeleteFile(
+                    session.ProjectFilePath);
+            }
+
             CleanupEmptyProvisioning(
                 provisioned);
 
@@ -121,6 +142,22 @@ public sealed class CompanionProjectCreationService
 
         TryDeleteDirectoryIfEmpty(
             provisioned.WorkspaceRoot);
+    }
+
+    private static void TryDeleteFile(
+        string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+        catch
+        {
+            // Cleanup is best-effort only.
+        }
     }
 
     private static void TryDeleteDirectoryIfEmpty(
