@@ -14,70 +14,212 @@ public partial class MainWindow
     private readonly CompanionProjectManager _projectManager =
         new();
 
+    private readonly CompanionGameInstallationLocator
+        _gameInstallationLocator =
+            new();
+
+    private readonly CompanionProjectCreationService
+        _projectCreationService =
+            new();
+
+    private readonly CompanionProjectMapImportService
+        _mapImportService =
+            new();
+
+    private readonly CompanionProjectLayout
+        _projectLayout =
+            new();
+
     private CompanionProjectSession? _projectSession;
+
+    private string? _gameInstallationDirectory;
+
+    private Button? _gameFolderButton;
+
+    private ComboBox? _mapSelectorComboBox;
+
+    private bool _refreshingMapSelector;
+
+    protected override void OnContentRendered(
+        EventArgs e)
+    {
+        base.OnContentRendered(
+            e);
+
+        EnsureProjectControls();
+        RefreshProjectInterface();
+    }
+
+    private void EnsureProjectControls()
+    {
+        ImportMapButton.Content =
+            "Add Map";
+
+        OpenProjectFolderButton.Content =
+            "Project Files";
+
+        OpenCurrentMapButton.Content =
+            "Open Map in TrenchBroom";
+
+        if (ImportMapButton.Parent is not
+            StackPanel buttonPanel)
+        {
+            return;
+        }
+
+        if (_mapSelectorComboBox is null)
+        {
+            _mapSelectorComboBox =
+                new ComboBox
+                {
+                    Width =
+                        170,
+
+                    Height =
+                        38,
+
+                    Margin =
+                        new Thickness(
+                            0,
+                            0,
+                            10,
+                            0),
+
+                    VerticalContentAlignment =
+                        VerticalAlignment.Center,
+
+                    DisplayMemberPath =
+                        nameof(
+                            CompanionMapChoice.DisplayName),
+
+                    IsEnabled =
+                        false,
+
+                    ToolTip =
+                        "Current project map"
+                };
+
+            _mapSelectorComboBox.SelectionChanged +=
+                ProjectMapComboBox_SelectionChanged;
+
+            int insertionIndex =
+                buttonPanel.Children.IndexOf(
+                    ImportMapButton);
+
+            if (insertionIndex < 0)
+            {
+                insertionIndex = 0;
+            }
+
+            buttonPanel.Children.Insert(
+                insertionIndex,
+                _mapSelectorComboBox);
+        }
+
+        if (_gameFolderButton is null)
+        {
+            _gameFolderButton =
+                new Button
+                {
+                    Content =
+                        "Game Folder",
+
+                    Style =
+                        FindResource(
+                            "DarkButtonStyle")
+                        as Style,
+
+                    IsEnabled =
+                        false,
+
+                    ToolTip =
+                        "Open the runtime mod folder used by the selected game"
+                };
+
+            _gameFolderButton.Click +=
+                OpenGameFolder_Click;
+
+            int insertionIndex =
+                buttonPanel.Children.IndexOf(
+                    OpenCurrentMapButton);
+
+            if (insertionIndex < 0)
+            {
+                insertionIndex =
+                    buttonPanel.Children.Count;
+            }
+
+            buttonPanel.Children.Insert(
+                insertionIndex,
+                _gameFolderButton);
+        }
+    }
 
     private void NewProject_Click(
         object sender,
         RoutedEventArgs e)
     {
-        string gameId =
-            GetSelectedProjectGameId();
+        EnsureProjectControls();
 
-        SaveFileDialog dialog = new()
-        {
-            Title =
-                "Create TrenchBroom Companion Project",
-
-            Filter =
-                "TrenchBroom Companion projects|*.tbproject|" +
-                "All files|*.*",
-
-            DefaultExt =
-                CompanionProjectStore.ProjectExtension,
-
-            AddExtension =
-                true,
-
-            OverwritePrompt =
-                false,
-
-            FileName =
-                "NewProject.tbproject"
-        };
-
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        string? directory =
-            Path.GetDirectoryName(
-                dialog.FileName);
-
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            ShowProjectError(
-                "The selected project location is invalid.");
-
-            return;
-        }
-
-        string projectName =
-            Path.GetFileNameWithoutExtension(
-                dialog.FileName);
+        CompanionGameProfile gameProfile;
 
         try
         {
-            _projectSession =
-                _projectManager.Create(
-                    directory,
-                    projectName,
-                    gameId);
+            gameProfile =
+                CompanionGameProfiles.GetRequired(
+                    GetSelectedProjectGameId());
+        }
+        catch (Exception exception)
+        {
+            ShowProjectError(
+                exception.Message);
 
-            Directory.CreateDirectory(
-                Path.Combine(
-                    _projectSession.ProjectDirectory,
-                    "maps"));
+            return;
+        }
+
+        string? gameInstallation =
+            ResolveGameInstallation(
+                gameProfile,
+                promptIfMissing: true);
+
+        if (string.IsNullOrWhiteSpace(
+                gameInstallation))
+        {
+            return;
+        }
+
+        CompanionNewProjectDialog dialog =
+            new(
+                gameProfile)
+            {
+                Owner =
+                    this
+            };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            CompanionProjectCreationResult creation =
+                _projectCreationService.Create(
+                    gameProfile,
+                    dialog.SelectedDriveRoot,
+                    gameInstallation,
+                    dialog.ProjectName);
+
+            _projectSession =
+                creation.Session;
+
+            _gameInstallationDirectory =
+                creation
+                    .ProvisionedProject
+                    .GameInstallationDirectory;
+
+            SelectProjectGame(
+                gameProfile.Id);
 
             RefreshProjectInterface();
 
@@ -95,24 +237,31 @@ public partial class MainWindow
         object sender,
         RoutedEventArgs e)
     {
-        OpenFileDialog dialog = new()
-        {
-            Title =
-                "Open TrenchBroom Companion Project",
+        EnsureProjectControls();
 
-            Filter =
-                "TrenchBroom Companion projects|*.tbproject|" +
-                "All files|*.*",
+        OpenFileDialog dialog =
+            new()
+            {
+                Title =
+                    "Open TrenchBroom Companion Project",
 
-            Multiselect =
-                false,
+                Filter =
+                    "TrenchBroom Companion projects|*.tbproject|" +
+                    "All files|*.*",
 
-            CheckFileExists =
-                true,
+                InitialDirectory =
+                    GetDefaultProjectsRoot() ??
+                    string.Empty,
 
-            CheckPathExists =
-                true
-        };
+                Multiselect =
+                    false,
+
+                CheckFileExists =
+                    true,
+
+                CheckPathExists =
+                    true
+            };
 
         if (dialog.ShowDialog(this) != true)
         {
@@ -128,6 +277,15 @@ public partial class MainWindow
             SelectProjectGame(
                 _projectSession.Project.GameId);
 
+            CompanionGameProfile gameProfile =
+                CompanionGameProfiles.GetRequired(
+                    _projectSession.Project.GameId);
+
+            _gameInstallationDirectory =
+                ResolveGameInstallation(
+                    gameProfile,
+                    promptIfMissing: false);
+
             RefreshProjectInterface();
 
             StatusText.Text =
@@ -135,6 +293,14 @@ public partial class MainWindow
         }
         catch (Exception exception)
         {
+            _projectSession =
+                null;
+
+            _gameInstallationDirectory =
+                null;
+
+            RefreshProjectInterface();
+
             ShowProjectError(
                 exception.Message);
         }
@@ -155,6 +321,9 @@ public partial class MainWindow
         _projectSession =
             null;
 
+        _gameInstallationDirectory =
+            null;
+
         RefreshProjectInterface();
 
         StatusText.Text =
@@ -170,24 +339,25 @@ public partial class MainWindow
             return;
         }
 
-        OpenFileDialog dialog = new()
-        {
-            Title =
-                "Import Existing Map",
+        OpenFileDialog dialog =
+            new()
+            {
+                Title =
+                    "Add Maps to Project",
 
-            Filter =
-                "TrenchBroom map files|*.map|" +
-                "All files|*.*",
+                Filter =
+                    "TrenchBroom map files|*.map|" +
+                    "All files|*.*",
 
-            Multiselect =
-                false,
+                Multiselect =
+                    true,
 
-            CheckFileExists =
-                true,
+                CheckFileExists =
+                    true,
 
-            CheckPathExists =
-                true
-        };
+                CheckPathExists =
+                    true
+            };
 
         if (dialog.ShowDialog(this) != true)
         {
@@ -196,92 +366,23 @@ public partial class MainWindow
 
         try
         {
-            string importedMapPath =
-                ImportMapIntoCurrentProject(
-                    dialog.FileName);
+            IReadOnlyList<string> imported =
+                _mapImportService.ImportMaps(
+                    _projectSession,
+                    dialog.FileNames);
 
             RefreshProjectInterface();
 
             StatusText.Text =
-                $"Imported '{Path.GetFileName(importedMapPath)}'.";
+                imported.Count == 1
+                    ? $"Added '{Path.GetFileName(imported[0])}' to the project."
+                    : $"Added {imported.Count:N0} maps to the project.";
         }
         catch (Exception exception)
         {
             ShowProjectError(
                 exception.Message);
         }
-    }
-
-    private string ImportMapIntoCurrentProject(
-        string sourceMapPath)
-    {
-        if (_projectSession is null)
-        {
-            throw new InvalidOperationException(
-                "Open a project before importing a map.");
-        }
-
-        string fullSourcePath =
-            Path.GetFullPath(
-                sourceMapPath);
-
-        if (!File.Exists(fullSourcePath))
-        {
-            throw new FileNotFoundException(
-                "The selected map file no longer exists.",
-                fullSourcePath);
-        }
-
-        if (!string.Equals(
-                Path.GetExtension(fullSourcePath),
-                ".map",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidDataException(
-                "Only .map files can be imported.");
-        }
-
-        string mapsDirectory =
-            Path.Combine(
-                _projectSession.ProjectDirectory,
-                "maps");
-
-        Directory.CreateDirectory(
-            mapsDirectory);
-
-        string destinationPath =
-            Path.Combine(
-                mapsDirectory,
-                Path.GetFileName(fullSourcePath));
-
-        bool sameFile =
-            string.Equals(
-                fullSourcePath,
-                Path.GetFullPath(destinationPath),
-                StringComparison.OrdinalIgnoreCase);
-
-        if (!sameFile)
-        {
-            if (File.Exists(destinationPath))
-            {
-                throw new IOException(
-                    $"A map named '{Path.GetFileName(destinationPath)}' " +
-                    "already exists in this project.");
-            }
-
-            File.Copy(
-                fullSourcePath,
-                destinationPath,
-                overwrite: false);
-        }
-
-        _projectSession.AddMap(
-            destinationPath,
-            makeActive: true);
-
-        _projectSession.Save();
-
-        return destinationPath;
     }
 
     private void OpenProjectFolder_Click(
@@ -295,11 +396,47 @@ public partial class MainWindow
             return;
         }
 
+        OpenDirectory(
+            _projectSession.ProjectDirectory);
+    }
+
+    private void OpenGameFolder_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        string? runtimeDirectory =
+            GetRuntimeModDirectory();
+
+        if (string.IsNullOrWhiteSpace(
+                runtimeDirectory))
+        {
+            ShowProjectError(
+                "The game installation could not be located for this project.");
+
+            return;
+        }
+
+        if (!Directory.Exists(
+                runtimeDirectory))
+        {
+            ShowProjectError(
+                "The runtime mod folder does not exist yet.");
+
+            return;
+        }
+
+        OpenDirectory(
+            runtimeDirectory);
+    }
+
+    private static void OpenDirectory(
+        string directory)
+    {
         Process.Start(
             new ProcessStartInfo
             {
                 FileName =
-                    _projectSession.ProjectDirectory,
+                    directory,
 
                 UseShellExecute =
                     true
@@ -318,8 +455,10 @@ public partial class MainWindow
         string? activeMapPath =
             _projectSession.GetActiveMapFullPath();
 
-        if (string.IsNullOrWhiteSpace(activeMapPath) ||
-            !File.Exists(activeMapPath))
+        if (string.IsNullOrWhiteSpace(
+                activeMapPath) ||
+            !File.Exists(
+                activeMapPath))
         {
             MessageBox.Show(
                 this,
@@ -376,6 +515,196 @@ public partial class MainWindow
             $"Opened '{Path.GetFileName(activeMapPath)}' in TrenchBroom.";
     }
 
+    private void ProjectMapComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (_refreshingMapSelector ||
+            _projectSession is null ||
+            _mapSelectorComboBox?.SelectedItem is not
+                CompanionMapChoice selectedMap)
+        {
+            return;
+        }
+
+        try
+        {
+            _projectSession.SetActiveMap(
+                selectedMap.FullPath);
+
+            _projectSession.Save();
+
+            RefreshProjectInterface();
+
+            StatusText.Text =
+                $"Current map: {selectedMap.DisplayName}.";
+        }
+        catch (Exception exception)
+        {
+            ShowProjectError(
+                exception.Message);
+
+            RefreshProjectInterface();
+        }
+    }
+
+    private string? GetDefaultProjectsRoot()
+    {
+        if (_projectSession is not null)
+        {
+            string? currentWorkspaceRoot =
+                Path.GetDirectoryName(
+                    _projectSession.ProjectDirectory);
+
+            if (!string.IsNullOrWhiteSpace(
+                    currentWorkspaceRoot) &&
+                Directory.Exists(
+                    currentWorkspaceRoot))
+            {
+                return Path.GetFullPath(
+                    currentWorkspaceRoot);
+            }
+        }
+
+        string? applicationDriveRoot =
+            Path.GetPathRoot(
+                AppContext.BaseDirectory);
+
+        if (!string.IsNullOrWhiteSpace(
+                applicationDriveRoot))
+        {
+            string applicationWorkspace =
+                Path.Combine(
+                    applicationDriveRoot,
+                    CompanionProjectLayout.WorkspaceDirectoryName);
+
+            if (Directory.Exists(
+                    applicationWorkspace))
+            {
+                return Path.GetFullPath(
+                    applicationWorkspace);
+            }
+        }
+
+        foreach (DriveInfo drive in
+                 DriveInfo.GetDrives()
+                     .Where(
+                         drive =>
+                             drive.IsReady &&
+                             drive.DriveType is
+                                 DriveType.Fixed or
+                                 DriveType.Removable)
+                     .OrderBy(
+                         drive =>
+                             drive.Name,
+                         StringComparer.OrdinalIgnoreCase))
+        {
+            string workspaceRoot =
+                Path.Combine(
+                    drive.RootDirectory.FullName,
+                    CompanionProjectLayout.WorkspaceDirectoryName);
+
+            if (Directory.Exists(
+                    workspaceRoot))
+            {
+                return Path.GetFullPath(
+                    workspaceRoot);
+            }
+        }
+
+        return null;
+    }
+
+    private string? ResolveGameInstallation(
+        CompanionGameProfile gameProfile,
+        bool promptIfMissing)
+    {
+        string? detected =
+            _gameInstallationLocator.FindInstallation(
+                gameProfile);
+
+        if (!string.IsNullOrWhiteSpace(
+                detected))
+        {
+            return detected;
+        }
+
+        if (!promptIfMissing)
+        {
+            return null;
+        }
+
+        OpenFolderDialog dialog =
+            new()
+            {
+                Title =
+                    $"Locate {gameProfile.DisplayName} installation"
+            };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return null;
+        }
+
+        if (!_gameInstallationLocator.IsInstallationDirectory(
+                gameProfile,
+                dialog.FolderName))
+        {
+            MessageBox.Show(
+                this,
+                $"That folder does not appear to be the {gameProfile.DisplayName} installation folder.",
+                "Game Installation Not Recognized",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            return null;
+        }
+
+        return Path.GetFullPath(
+            dialog.FolderName);
+    }
+
+    private string? GetRuntimeModDirectory()
+    {
+        if (_projectSession is null ||
+            string.IsNullOrWhiteSpace(
+                _gameInstallationDirectory))
+        {
+            return null;
+        }
+
+        CompanionGameProfile gameProfile;
+
+        try
+        {
+            gameProfile =
+                CompanionGameProfiles.GetRequired(
+                    _projectSession.Project.GameId);
+        }
+        catch
+        {
+            return null;
+        }
+
+        string runtimeName =
+            string.IsNullOrWhiteSpace(
+                _projectSession.Project.ModName)
+                ? _projectSession.Project.Name
+                : _projectSession.Project.ModName;
+
+        try
+        {
+            return _projectLayout.GetRuntimeModDirectory(
+                gameProfile,
+                _gameInstallationDirectory,
+                runtimeName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private string GetSelectedProjectGameId()
     {
         ComboBoxItem? selected =
@@ -386,7 +715,8 @@ public partial class MainWindow
             selected?.Tag
             as string;
 
-        return string.IsNullOrWhiteSpace(gameId)
+        return string.IsNullOrWhiteSpace(
+                gameId)
             ? "dusk"
             : gameId;
     }
@@ -397,7 +727,8 @@ public partial class MainWindow
         foreach (object item in
                  ProjectGameComboBox.Items)
         {
-            if (item is not ComboBoxItem comboItem)
+            if (item is not
+                ComboBoxItem comboItem)
             {
                 continue;
             }
@@ -418,6 +749,8 @@ public partial class MainWindow
 
     private void RefreshProjectInterface()
     {
+        EnsureProjectControls();
+
         if (_projectSession is null)
         {
             ProjectNameText.Text =
@@ -447,6 +780,15 @@ public partial class MainWindow
             OpenCurrentMapButton.IsEnabled =
                 false;
 
+            if (_gameFolderButton is not null)
+            {
+                _gameFolderButton.IsEnabled =
+                    false;
+            }
+
+            RefreshMapSelector(
+                activeMapPath: null);
+
             return;
         }
 
@@ -474,27 +816,15 @@ public partial class MainWindow
                 ? "1 map"
                 : $"{project.Maps.Count:N0} maps";
 
-        string currentMapText =
-            "None";
-
         string? activeMapFullPath =
             null;
+
+        string currentMapText =
+            "None";
 
         if (!string.IsNullOrWhiteSpace(
                 project.ActiveMapPath))
         {
-            CompanionProjectMap? activeMap =
-                project.Maps.FirstOrDefault(
-                    map =>
-                        string.Equals(
-                            map.Path,
-                            project.ActiveMapPath,
-                            StringComparison.OrdinalIgnoreCase));
-
-            currentMapText =
-                activeMap?.DisplayName ??
-                project.ActiveMapPath;
-
             try
             {
                 activeMapFullPath =
@@ -505,6 +835,14 @@ public partial class MainWindow
                 activeMapFullPath =
                     null;
             }
+
+            if (!string.IsNullOrWhiteSpace(
+                    activeMapFullPath))
+            {
+                currentMapText =
+                    Path.GetFileNameWithoutExtension(
+                        activeMapFullPath);
+            }
         }
 
         ProjectNameText.Text =
@@ -514,10 +852,10 @@ public partial class MainWindow
             $"{game} | {mapCountText} | Current map: {currentMapText}";
 
         ProjectLocationText.Text =
-            _projectSession.ProjectFilePath;
+            _projectSession.ProjectDirectory;
 
         ProjectLocationText.ToolTip =
-            _projectSession.ProjectFilePath;
+            _projectSession.ProjectDirectory;
 
         SelectProjectGame(
             project.GameId);
@@ -536,8 +874,110 @@ public partial class MainWindow
                 _projectSession.ProjectDirectory);
 
         OpenCurrentMapButton.IsEnabled =
-            !string.IsNullOrWhiteSpace(activeMapFullPath) &&
-            File.Exists(activeMapFullPath);
+            !string.IsNullOrWhiteSpace(
+                activeMapFullPath) &&
+            File.Exists(
+                activeMapFullPath);
+
+        string? runtimeDirectory =
+            GetRuntimeModDirectory();
+
+        if (_gameFolderButton is not null)
+        {
+            _gameFolderButton.IsEnabled =
+                !string.IsNullOrWhiteSpace(
+                    runtimeDirectory) &&
+                Directory.Exists(
+                    runtimeDirectory);
+        }
+
+        RefreshMapSelector(
+            activeMapFullPath);
+    }
+
+    private void RefreshMapSelector(
+        string? activeMapPath)
+    {
+        if (_mapSelectorComboBox is null)
+        {
+            return;
+        }
+
+        _refreshingMapSelector =
+            true;
+
+        try
+        {
+            _mapSelectorComboBox.Items.Clear();
+
+            if (_projectSession is null)
+            {
+                _mapSelectorComboBox.IsEnabled =
+                    false;
+
+                return;
+            }
+
+            CompanionMapChoice? activeChoice =
+                null;
+
+            foreach (CompanionProjectMap map in
+                     _projectSession.Project.Maps)
+            {
+                string fullPath;
+
+                try
+                {
+                    fullPath =
+                        CompanionProjectStore.ResolveMapPath(
+                            _projectSession.ProjectFilePath,
+                            map.Path);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                CompanionMapChoice choice =
+                    new(
+                        string.IsNullOrWhiteSpace(
+                            map.DisplayName)
+                            ? Path.GetFileNameWithoutExtension(
+                                fullPath)
+                            : map.DisplayName,
+                        fullPath);
+
+                _mapSelectorComboBox.Items.Add(
+                    choice);
+
+                if (!string.IsNullOrWhiteSpace(
+                        activeMapPath) &&
+                    string.Equals(
+                        fullPath,
+                        activeMapPath,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    activeChoice =
+                        choice;
+                }
+            }
+
+            _mapSelectorComboBox.SelectedItem =
+                activeChoice ??
+                (
+                    _mapSelectorComboBox.Items.Count > 0
+                        ? _mapSelectorComboBox.Items[0]
+                        : null
+                );
+
+            _mapSelectorComboBox.IsEnabled =
+                _mapSelectorComboBox.Items.Count > 0;
+        }
+        finally
+        {
+            _refreshingMapSelector =
+                false;
+        }
     }
 
     private void ShowProjectError(
