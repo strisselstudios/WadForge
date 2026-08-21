@@ -855,21 +855,14 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        string wadForgePath =
-            Path.GetFullPath(
-                Path.Combine(
-                    AppContext.BaseDirectory,
-                    "..",
-                    "WadForge",
-                    "WadForge.exe"));
+        string? wadForgePath =
+            FindWadForgeExecutable();
 
-        if (!File.Exists(wadForgePath))
+        if (string.IsNullOrWhiteSpace(wadForgePath))
         {
             MessageBox.Show(
                 this,
-                "WadForge.exe was not found at:" +
-                Environment.NewLine +
-                wadForgePath,
+                "WadForge could not be found in the Companion suite or the current development build.",
                 "WadForge Not Found",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -889,6 +882,52 @@ public partial class MainWindow : Window
 
                 UseShellExecute = true
             });
+    }
+
+    private static string? FindWadForgeExecutable()
+    {
+        string baseDirectory =
+            Path.GetFullPath(
+                AppContext.BaseDirectory);
+
+        string[] candidates =
+        {
+            Path.Combine(
+                baseDirectory,
+                "WadForge.exe"),
+
+            Path.GetFullPath(
+                Path.Combine(
+                    baseDirectory,
+                    "..",
+                    "WadForge",
+                    "WadForge.exe")),
+
+            Path.GetFullPath(
+                Path.Combine(
+                    baseDirectory,
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "WadForge.App",
+                    "bin",
+                    "Release",
+                    "net9.0-windows",
+                    "WadForge.exe"))
+        };
+
+        foreach (string candidate in
+                 candidates.Distinct(
+                     StringComparer.OrdinalIgnoreCase))
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private void SaveSettings()
