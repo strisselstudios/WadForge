@@ -8,7 +8,7 @@ namespace TrenchBroom.Companion.Core;
 
 public sealed class CompanionProjectMapCreationService
 {
-    private const string EmptyMapContents =
+    private const string EmptyWorldspawnContents =
         "{\r\n" +
         "\"classname\" \"worldspawn\"\r\n" +
         "}\r\n";
@@ -98,9 +98,14 @@ public sealed class CompanionProjectMapCreationService
 
         try
         {
+            string initialMapContents =
+                CompanionTrenchBroomMapIdentityService.BuildHeader(
+                    session.Project.GameId) +
+                EmptyWorldspawnContents;
+
             File.WriteAllText(
                 temporaryPath,
-                EmptyMapContents,
+                initialMapContents,
                 new UTF8Encoding(
                     encoderShouldEmitUTF8Identifier: false));
 

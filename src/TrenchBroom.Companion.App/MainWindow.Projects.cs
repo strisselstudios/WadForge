@@ -571,6 +571,19 @@ public partial class MainWindow
             return;
         }
 
+        try
+        {
+            PrepareActiveMapForTrenchBroom(
+                activeMapPath);
+        }
+        catch (Exception exception)
+        {
+            ShowProjectError(
+                exception.Message);
+
+            return;
+        }
+
         string workingDirectory =
             Path.GetDirectoryName(
                 _installation.ExecutablePath) ??
@@ -598,6 +611,41 @@ public partial class MainWindow
 
         StatusText.Text =
             $"Opened '{Path.GetFileName(activeMapPath)}' in TrenchBroom.";
+    }
+
+    private void PrepareActiveMapForTrenchBroom(
+        string activeMapPath)
+    {
+        if (_projectSession is null ||
+            _installation is null)
+        {
+            throw new InvalidOperationException(
+                "A Companion project and TrenchBroom installation are required.");
+        }
+
+        string gameId =
+            _projectSession.Project.GameId;
+
+        if (string.Equals(
+                gameId,
+                CompanionGameProfiles.Dusk.Id,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            if (!_installation.IsWadForgeCompatible ||
+                !IsManagedTrenchBroom())
+            {
+                throw new InvalidOperationException(
+                    "DUSK project integration requires the Companion-managed compatible TrenchBroom build. " +
+                    "Use the TrenchBroom setup control in Companion before opening this map.");
+            }
+
+            CompanionTrenchBroomGameConfigService.EnsureDuskGameConfig(
+                _installation.ExecutablePath);
+        }
+
+        CompanionTrenchBroomMapIdentityService.EnsureMapIdentity(
+            activeMapPath,
+            gameId);
     }
 
     private void ProjectMapComboBox_SelectionChanged(
