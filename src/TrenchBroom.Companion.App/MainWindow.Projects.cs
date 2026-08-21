@@ -68,7 +68,7 @@ public partial class MainWindow
             "Open Map in TrenchBroom";
 
         if (ImportMapButton.Parent is not
-            StackPanel buttonPanel)
+            Panel buttonPanel)
         {
             return;
         }
@@ -89,7 +89,7 @@ public partial class MainWindow
                             0,
                             0,
                             10,
-                            0),
+                            10),
 
                     VerticalContentAlignment =
                         VerticalAlignment.Center,
@@ -135,6 +135,13 @@ public partial class MainWindow
                             "DarkButtonStyle")
                         as Style,
 
+                    Margin =
+                        new Thickness(
+                            0,
+                            0,
+                            10,
+                            10),
+
                     IsEnabled =
                         false,
 
@@ -172,6 +179,13 @@ public partial class MainWindow
                         FindResource(
                             "DarkButtonStyle")
                         as Style,
+
+                    Margin =
+                        new Thickness(
+                            0,
+                            0,
+                            10,
+                            10),
 
                     IsEnabled =
                         false,
