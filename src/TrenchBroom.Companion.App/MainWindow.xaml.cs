@@ -12,6 +12,7 @@ public partial class MainWindow : Window
 {
     private readonly CompanionSettings _settings;
     private TrenchBroomInstallationInfo? _installation;
+    private Button? _installationActionButton;
 
     public MainWindow()
     {
@@ -21,6 +22,7 @@ public partial class MainWindow : Window
             new ObservableCollection<WadRegistrationResult>();
 
         DataContext = this;
+        ConfigureTrenchBroomPresentation();
 
         try
         {
@@ -218,10 +220,129 @@ public partial class MainWindow : Window
             return false;
         }
     }
+    private void ConfigureTrenchBroomPresentation()
+    {
+        InstallationPathTextBox.Visibility =
+            Visibility.Collapsed;
+
+        InstallationPathTextBox.IsTabStop =
+            false;
+
+        if (InstallationPathTextBox.Parent is not
+            Grid installationGrid)
+        {
+            return;
+        }
+
+        if (installationGrid.RowDefinitions.Count >= 3)
+        {
+            installationGrid.RowDefinitions[1].Height =
+                new GridLength(0);
+
+            installationGrid.RowDefinitions[2].Height =
+                new GridLength(0);
+        }
+
+        foreach (UIElement child in
+                 installationGrid.Children)
+        {
+            if (child is not Grid headerGrid ||
+                Grid.GetRow(headerGrid) != 0)
+            {
+                continue;
+            }
+
+            foreach (UIElement headerChild in
+                     headerGrid.Children)
+            {
+                if (headerChild is Button button)
+                {
+                    _installationActionButton =
+                        button;
+
+                    continue;
+                }
+
+                if (headerChild is not
+                    StackPanel informationPanel)
+                {
+                    continue;
+                }
+
+                foreach (UIElement informationChild in
+                         informationPanel.Children)
+                {
+                    if (informationChild is
+                        TextBlock heading &&
+                        string.Equals(
+                            heading.Text,
+                            "TrenchBroom installation",
+                            StringComparison.Ordinal))
+                    {
+                        heading.Text =
+                            "TrenchBroom";
+                    }
+                }
+            }
+        }
+    }
+
+    private bool IsManagedTrenchBroom()
+    {
+        if (_installation is null ||
+            !_installation.IsValid)
+        {
+            return false;
+        }
+
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(
+                    _installation.ExecutablePath),
+                Path.GetFullPath(
+                    TrenchBroomManagedInstallationService
+                        .DefaultManagedExecutablePath),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void SetInstallationActionText(
+        string text)
+    {
+        if (_installationActionButton is not null)
+        {
+            _installationActionButton.Content =
+                text;
+        }
+    }
+
     private void SelectInstallation_Click(
         object sender,
         RoutedEventArgs e)
     {
+        if (_installation is null ||
+            !_installation.IsValid ||
+            !_installation.IsWadForgeCompatible)
+        {
+            ResolveTrenchBroomInstallation();
+            RefreshInterface();
+
+            if (_installation is not null &&
+                _installation.IsValid &&
+                _installation.IsWadForgeCompatible)
+            {
+                StatusText.Text =
+                    "Companion-compatible TrenchBroom is ready.";
+
+                return;
+            }
+        }
+
         OpenFileDialog dialog = new()
         {
             Title = "Select TrenchBroom.exe",
@@ -290,8 +411,20 @@ public partial class MainWindow : Window
         SaveSettings();
 
         StatusText.Text =
-            "Standard TrenchBroom selected. Companion did not modify it. " +
-            "The compatible build still needs to be set up for long texture aliases.";
+            "Standard TrenchBroom selected as a limited fallback. " +
+            "Companion did not modify it.";
+
+        MessageBox.Show(
+            this,
+            "This is a standard TrenchBroom build." +
+            Environment.NewLine +
+            Environment.NewLine +
+            "Companion will not patch or overwrite it. " +
+            "Use the compatible TrenchBroom build included with the full Companion suite " +
+            "for long texture aliases and full Companion support.",
+            "Compatible TrenchBroom Recommended",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
 
         RefreshInterface();
     }
@@ -773,33 +906,62 @@ public partial class MainWindow : Window
 
     private void RefreshInterface()
     {
-        if (_installation is null)
+        InstallationPathTextBox.Visibility =
+            Visibility.Collapsed;
+
+        if (_installation is null ||
+            !_installation.IsValid)
         {
             InstallationPathTextBox.Text =
                 "No installation selected";
 
             InstallationStatusText.Text =
-                "No TrenchBroom executable selected.";
+                "Setup required — no compatible TrenchBroom build is ready.";
 
-            LaunchButton.IsEnabled = false;
+            InstallationStatusText.ToolTip =
+                null;
+
+            SetInstallationActionText(
+                "Set Up TrenchBroom");
+
+            LaunchButton.IsEnabled =
+                false;
         }
         else
         {
             InstallationPathTextBox.Text =
                 _installation.ExecutablePath;
 
+            InstallationStatusText.ToolTip =
+                _installation.ExecutablePath;
+
             string versionText =
                 string.IsNullOrWhiteSpace(
                     _installation.Version)
                     ? string.Empty
-                    : $" Version: {_installation.Version}.";
+                    : $" {_installation.Version}";
 
-            InstallationStatusText.Text =
-                _installation.Status +
-                versionText;
+            if (_installation.IsWadForgeCompatible)
+            {
+                InstallationStatusText.Text =
+                    IsManagedTrenchBroom()
+                        ? $"✓ Ready — Companion-managed compatible build{versionText}"
+                        : $"✓ Ready — compatible TrenchBroom{versionText}";
+
+                SetInstallationActionText(
+                    "Change");
+            }
+            else
+            {
+                InstallationStatusText.Text =
+                    $"Limited — standard TrenchBroom{versionText}. " +
+                    "Set up the compatible build for full Companion support.";
+
+                SetInstallationActionText(
+                    "Set Up Compatible Build");
+            }
 
             LaunchButton.IsEnabled =
-                _installation.IsValid &&
                 File.Exists(
                     _installation.ExecutablePath);
         }
