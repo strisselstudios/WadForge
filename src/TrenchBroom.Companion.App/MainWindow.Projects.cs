@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -282,9 +282,8 @@ public partial class MainWindow
                     _projectSession.Project.GameId);
 
             _gameInstallationDirectory =
-                ResolveGameInstallation(
-                    gameProfile,
-                    promptIfMissing: false);
+                ResolveProjectGameInstallation(
+                    gameProfile);
 
             RefreshProjectInterface();
 
@@ -615,6 +614,115 @@ public partial class MainWindow
         return null;
     }
 
+    private string? ResolveProjectGameInstallation(
+        CompanionGameProfile gameProfile)
+    {
+        if (_projectSession is null)
+        {
+            return null;
+        }
+
+        CompanionProjectGameBinding? binding =
+            _projectSession.Project.GameBinding;
+
+        if (binding is not null &&
+            _gameInstallationLocator.IsInstallationDirectory(
+                gameProfile,
+                binding.GameInstallationDirectory))
+        {
+            EnsureProjectRuntimeDirectory(
+                binding.RuntimeModDirectory);
+
+            return Path.GetFullPath(
+                binding.GameInstallationDirectory);
+        }
+
+        string? detected =
+            _gameInstallationLocator.FindInstallation(
+                gameProfile);
+
+        if (!string.IsNullOrWhiteSpace(
+                detected))
+        {
+            PersistProjectGameBinding(
+                gameProfile,
+                detected);
+
+            return detected;
+        }
+
+        string? selectedInstallation =
+            ResolveGameInstallation(
+                gameProfile,
+                promptIfMissing: true);
+
+        if (string.IsNullOrWhiteSpace(
+                selectedInstallation))
+        {
+            return null;
+        }
+
+        PersistProjectGameBinding(
+            gameProfile,
+            selectedInstallation);
+
+        return selectedInstallation;
+    }
+
+    private void PersistProjectGameBinding(
+        CompanionGameProfile gameProfile,
+        string gameInstallationDirectory)
+    {
+        if (_projectSession is null)
+        {
+            return;
+        }
+
+        string fullGameInstallationDirectory =
+            Path.GetFullPath(
+                gameInstallationDirectory);
+
+        string runtimeName =
+            string.IsNullOrWhiteSpace(
+                _projectSession.Project.ModName)
+                ? _projectSession.Project.Name
+                : _projectSession.Project.ModName;
+
+        string runtimeModDirectory =
+            _projectLayout.GetRuntimeModDirectory(
+                gameProfile,
+                fullGameInstallationDirectory,
+                runtimeName);
+
+        EnsureProjectRuntimeDirectory(
+            runtimeModDirectory);
+
+        _projectSession.Project.GameBinding =
+            new CompanionProjectGameBinding
+            {
+                GameInstallationDirectory =
+                    fullGameInstallationDirectory,
+
+                RuntimeModDirectory =
+                    runtimeModDirectory
+            };
+
+        _projectSession.Save();
+    }
+
+    private static void EnsureProjectRuntimeDirectory(
+        string runtimeModDirectory)
+    {
+        string fullRuntimeModDirectory =
+            Path.GetFullPath(
+                runtimeModDirectory);
+
+        Directory.CreateDirectory(
+            Path.Combine(
+                fullRuntimeModDirectory,
+                CompanionProjectLayout.MapsDirectoryName));
+    }
+
     private string? ResolveGameInstallation(
         CompanionGameProfile gameProfile,
         bool promptIfMissing)
@@ -666,8 +774,30 @@ public partial class MainWindow
 
     private string? GetRuntimeModDirectory()
     {
-        if (_projectSession is null ||
-            string.IsNullOrWhiteSpace(
+        if (_projectSession is null)
+        {
+            return null;
+        }
+
+        CompanionProjectGameBinding? binding =
+            _projectSession.Project.GameBinding;
+
+        if (binding is not null &&
+            !string.IsNullOrWhiteSpace(
+                binding.RuntimeModDirectory))
+        {
+            try
+            {
+                return Path.GetFullPath(
+                    binding.RuntimeModDirectory);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(
                 _gameInstallationDirectory))
         {
             return null;
