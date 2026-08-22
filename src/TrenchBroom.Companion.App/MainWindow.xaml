@@ -74,6 +74,85 @@
             </Setter>
         </Style>
 
+        <DataTemplate x:Key="MapChoiceTemplate">
+            <TextBlock Text="{Binding DisplayName}"
+                       Foreground="#F4F7FB"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding DisplayName}" />
+        </DataTemplate>
+
+        <Style x:Key="DarkContextMenuStyle"
+               TargetType="ContextMenu">
+            <Setter Property="Background"
+                    Value="#151D26" />
+            <Setter Property="Foreground"
+                    Value="#F4F7FB" />
+            <Setter Property="BorderBrush"
+                    Value="#354454" />
+            <Setter Property="BorderThickness"
+                    Value="1" />
+            <Setter Property="Padding"
+                    Value="4" />
+            <Setter Property="MinWidth"
+                    Value="220" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkMenuItemStyle"
+               TargetType="MenuItem">
+            <Setter Property="Foreground"
+                    Value="#F4F7FB" />
+            <Setter Property="Background"
+                    Value="Transparent" />
+            <Setter Property="Padding"
+                    Value="12,9" />
+            <Setter Property="Cursor"
+                    Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="MenuItemBorder"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4">
+                            <ContentPresenter ContentSource="Header"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted"
+                                     Value="True">
+                                <Setter TargetName="MenuItemBorder"
+                                        Property="Background"
+                                        Value="#24476D" />
+                                <Setter Property="Foreground"
+                                        Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled"
+                                     Value="False">
+                                <Setter Property="Foreground"
+                                        Value="#758294" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="ComboBox">
             <Setter Property="Foreground" Value="#F4F7FB" />
             <Setter Property="Background" Value="#151D26" />

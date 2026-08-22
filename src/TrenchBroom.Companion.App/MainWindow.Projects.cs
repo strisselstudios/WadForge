@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Microsoft.Win32;
 using TrenchBroom.Companion.Core;
 
@@ -30,6 +31,10 @@ public partial class MainWindow
         _mapCreationService =
             new();
 
+    private readonly CompanionProjectMapLifecycleService
+        _mapLifecycleService =
+            new();
+
     private readonly CompanionProjectLayout
         _projectLayout =
             new();
@@ -41,6 +46,8 @@ public partial class MainWindow
     private Button? _gameFolderButton;
 
     private Button? _newMapButton;
+
+    private Button? _mapActionsButton;
 
     private ComboBox? _mapSelectorComboBox;
 
@@ -79,7 +86,10 @@ public partial class MainWindow
                 new ComboBox
                 {
                     Width =
-                        170,
+                        230,
+
+                    MinWidth =
+                        210,
 
                     Height =
                         38,
@@ -91,12 +101,16 @@ public partial class MainWindow
                             10,
                             10),
 
+                    HorizontalContentAlignment =
+                        HorizontalAlignment.Stretch,
+
                     VerticalContentAlignment =
                         VerticalAlignment.Center,
 
-                    DisplayMemberPath =
-                        nameof(
-                            CompanionMapChoice.DisplayName),
+                    ItemTemplate =
+                        FindResource(
+                            "MapChoiceTemplate")
+                        as DataTemplate,
 
                     IsEnabled =
                         false,
@@ -120,6 +134,102 @@ public partial class MainWindow
             buttonPanel.Children.Insert(
                 insertionIndex,
                 _mapSelectorComboBox);
+        }
+
+        if (_mapActionsButton is null)
+        {
+            _mapActionsButton =
+                new Button
+                {
+                    Content =
+                        "Map Actions",
+
+                    Style =
+                        FindResource(
+                            "DarkButtonStyle")
+                        as Style,
+
+                    Margin =
+                        new Thickness(
+                            0,
+                            0,
+                            10,
+                            10),
+
+                    IsEnabled =
+                        false,
+
+                    ToolTip =
+                        "Remove the selected map from the project or move it safely to project backups"
+                };
+
+            ContextMenu mapActionsMenu =
+                new()
+                {
+                    Style =
+                        FindResource(
+                            "DarkContextMenuStyle")
+                        as Style,
+
+                    Placement =
+                        System.Windows.Controls.Primitives.PlacementMode.Bottom
+                };
+
+            MenuItem removeFromProjectItem =
+                new()
+                {
+                    Header =
+                        "Remove from Project",
+
+                    Style =
+                        FindResource(
+                            "DarkMenuItemStyle")
+                        as Style
+                };
+
+            removeFromProjectItem.Click +=
+                RemoveMapFromProject_Click;
+
+            MenuItem deleteMapSafelyItem =
+                new()
+                {
+                    Header =
+                        "Delete Map Safely",
+
+                    Style =
+                        FindResource(
+                            "DarkMenuItemStyle")
+                        as Style
+                };
+
+            deleteMapSafelyItem.Click +=
+                DeleteMapSafely_Click;
+
+            mapActionsMenu.Items.Add(
+                removeFromProjectItem);
+
+            mapActionsMenu.Items.Add(
+                deleteMapSafelyItem);
+
+            _mapActionsButton.ContextMenu =
+                mapActionsMenu;
+
+            _mapActionsButton.Click +=
+                MapActions_Click;
+
+            int insertionIndex =
+                buttonPanel.Children.IndexOf(
+                    ImportMapButton);
+
+            if (insertionIndex < 0)
+            {
+                insertionIndex =
+                    buttonPanel.Children.Count;
+            }
+
+            buttonPanel.Children.Insert(
+                insertionIndex,
+                _mapActionsButton);
         }
 
         if (_newMapButton is null)
@@ -482,6 +592,146 @@ public partial class MainWindow
             ShowProjectError(
                 exception.Message);
         }
+    }
+
+    private void MapActions_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_projectSession is null ||
+            _mapSelectorComboBox?.SelectedItem is not
+                CompanionMapChoice)
+        {
+            return;
+        }
+
+        if (_mapActionsButton?.ContextMenu is not
+            ContextMenu menu)
+        {
+            return;
+        }
+
+        menu.PlacementTarget =
+            _mapActionsButton;
+
+        menu.Placement =
+            System.Windows.Controls.Primitives.PlacementMode.Bottom;
+
+        menu.IsOpen =
+            true;
+    }
+
+    private void RemoveMapFromProject_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        CompanionMapChoice? selectedMap =
+            GetSelectedMapChoice();
+
+        if (_projectSession is null ||
+            selectedMap is null)
+        {
+            return;
+        }
+
+        MessageBoxResult confirmation =
+            MessageBox.Show(
+                this,
+                $"Remove '{Path.GetFileName(selectedMap.FullPath)}' from this Companion project?\r\n\r\n" +
+                "The .map file will stay exactly where it is. " +
+                "You can add it back to the project later.",
+                "Remove Map from Project",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question,
+                MessageBoxResult.No);
+
+        if (confirmation !=
+            MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            CompanionProjectMapRemovalResult result =
+                _mapLifecycleService.RemoveFromProject(
+                    _projectSession,
+                    selectedMap.FullPath);
+
+            RefreshProjectInterface();
+
+            StatusText.Text =
+                $"Removed '{result.DisplayName}' from the project. The map file was kept.";
+        }
+        catch (Exception exception)
+        {
+            ShowProjectError(
+                exception.Message);
+
+            RefreshProjectInterface();
+        }
+    }
+
+    private void DeleteMapSafely_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        CompanionMapChoice? selectedMap =
+            GetSelectedMapChoice();
+
+        if (_projectSession is null ||
+            selectedMap is null)
+        {
+            return;
+        }
+
+        MessageBoxResult confirmation =
+            MessageBox.Show(
+                this,
+                $"Delete '{Path.GetFileName(selectedMap.FullPath)}' from this project?\r\n\r\n" +
+                "Companion will NOT permanently erase it. " +
+                "The source .map will be moved into this project's backups\\Deleted Maps folder, " +
+                "then removed from the map list.",
+                "Delete Map Safely",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+        if (confirmation !=
+            MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            CompanionProjectMapRemovalResult result =
+                _mapLifecycleService.DeleteMapSafely(
+                    _projectSession,
+                    selectedMap.FullPath);
+
+            RefreshProjectInterface();
+
+            StatusText.Text =
+                result.FileMovedToBackup &&
+                !string.IsNullOrWhiteSpace(
+                    result.BackupPath)
+                    ? $"Moved '{result.DisplayName}' to project backups and removed it from the project."
+                    : $"Removed missing map '{result.DisplayName}' from the project.";
+        }
+        catch (Exception exception)
+        {
+            ShowProjectError(
+                exception.Message);
+
+            RefreshProjectInterface();
+        }
+    }
+
+    private CompanionMapChoice? GetSelectedMapChoice()
+    {
+        return _mapSelectorComboBox?.SelectedItem as
+            CompanionMapChoice;
     }
 
     private void OpenProjectFolder_Click(
@@ -1058,6 +1308,12 @@ public partial class MainWindow
                     false;
             }
 
+            if (_mapActionsButton is not null)
+            {
+                _mapActionsButton.IsEnabled =
+                    false;
+            }
+
             OpenProjectFolderButton.IsEnabled =
                 false;
 
@@ -1074,6 +1330,17 @@ public partial class MainWindow
                 activeMapPath: null);
 
             return;
+        }
+
+        try
+        {
+            _mapLifecycleService.ReconcileMissingMaps(
+                _projectSession);
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text =
+                $"Could not reconcile missing maps: {exception.Message}";
         }
 
         CompanionProjectManifest project =
@@ -1166,6 +1433,12 @@ public partial class MainWindow
                 true;
         }
 
+        if (_mapActionsButton is not null)
+        {
+            _mapActionsButton.IsEnabled =
+                project.Maps.Count > 0;
+        }
+
         OpenProjectFolderButton.IsEnabled =
             Directory.Exists(
                 _projectSession.ProjectDirectory);
@@ -1235,6 +1508,12 @@ public partial class MainWindow
                     continue;
                 }
 
+                if (!File.Exists(
+                        fullPath))
+                {
+                    continue;
+                }
+
                 CompanionMapChoice choice =
                     new(
                         string.IsNullOrWhiteSpace(
@@ -1266,6 +1545,18 @@ public partial class MainWindow
                         ? _mapSelectorComboBox.Items[0]
                         : null
                 );
+
+            if (_mapSelectorComboBox.SelectedItem is
+                CompanionMapChoice selectedChoice)
+            {
+                _mapSelectorComboBox.ToolTip =
+                    selectedChoice.DisplayName;
+            }
+            else
+            {
+                _mapSelectorComboBox.ToolTip =
+                    "Current project map";
+            }
 
             _mapSelectorComboBox.IsEnabled =
                 _mapSelectorComboBox.Items.Count > 0;
