@@ -50,6 +50,11 @@ public static class CompanionDuskAuthoringResourceService
             """(?s)(?<prefix>"definitions"\s*:\s*\[)[^\]]*(?<suffix>\])""",
             RegexOptions.CultureInvariant);
 
+    private static readonly Regex MaterialExtensionsRegex =
+        new(
+            """(?s)(?<prefix>"materials"\s*:\s*\{.*?"extensions"\s*:\s*\[)(?<values>[^\]]*)(?<suffix>\])""",
+            RegexOptions.CultureInvariant);
+
     public static CompanionDuskAuthoringResourceStatus GetStatus(
         string trenchBroomExecutablePath)
     {
@@ -132,6 +137,26 @@ public static class CompanionDuskAuthoringResourceService
                     return Missing(
                         paths,
                         "The managed DUSK game configuration could not be repaired to use the DUSK entity definition.");
+                }
+            }
+
+            if (!ContainsMixedDuskMaterialExtensions(
+                    gameConfigText))
+            {
+                PatchGameConfigMaterialExtensions(
+                    paths.GameConfigPath);
+
+                gameConfigText =
+                    File.ReadAllText(
+                        paths.GameConfigPath,
+                        Encoding.UTF8);
+
+                if (!ContainsMixedDuskMaterialExtensions(
+                        gameConfigText))
+                {
+                    return Missing(
+                        paths,
+                        "The managed DUSK game configuration could not be repaired to support both WAD2 and WAD3 texture archives.");
                 }
             }
         }
@@ -242,6 +267,9 @@ public static class CompanionDuskAuthoringResourceService
             paths.Id1Directory);
 
         PatchGameConfigEntityDefinitions(
+            paths.GameConfigPath);
+
+        PatchGameConfigMaterialExtensions(
             paths.GameConfigPath);
 
         CompanionDuskAuthoringResourceStatus status =
@@ -562,6 +590,117 @@ public static class CompanionDuskAuthoringResourceService
         }
 
         return false;
+    }
+
+
+    private static void PatchGameConfigMaterialExtensions(
+        string gameConfigPath)
+    {
+        if (!File.Exists(
+                gameConfigPath))
+        {
+            throw new FileNotFoundException(
+                "The managed DUSK GameConfig.cfg file does not exist.",
+                gameConfigPath);
+        }
+
+        string text =
+            File.ReadAllText(
+                gameConfigPath,
+                Encoding.UTF8);
+
+        Match match =
+            MaterialExtensionsRegex.Match(
+                text);
+
+        if (!match.Success)
+        {
+            throw new InvalidDataException(
+                "The managed DUSK GameConfig.cfg does not contain a version 9 materials extensions list that Companion can update safely.");
+        }
+
+        string replacement =
+            match.Groups["prefix"].Value +
+            " \".D\", \".C\" " +
+            match.Groups["suffix"].Value;
+
+        string patchedText =
+            MaterialExtensionsRegex.Replace(
+                text,
+                replacement,
+                count:
+                    1);
+
+        if (!ContainsMixedDuskMaterialExtensions(
+                patchedText))
+        {
+            throw new InvalidDataException(
+                "The managed DUSK GameConfig.cfg material extension update failed validation.");
+        }
+
+        WriteTextAtomically(
+            gameConfigPath,
+            patchedText);
+    }
+
+    private static bool ContainsMixedDuskMaterialExtensions(
+        string gameConfigText)
+    {
+        Match match =
+            MaterialExtensionsRegex.Match(
+                gameConfigText);
+
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        MatchCollection extensions =
+            Regex.Matches(
+                match.Groups["values"].Value,
+                "\"(?<extension>[^\"]+)\"",
+                RegexOptions.CultureInvariant);
+
+        if (extensions.Count != 2)
+        {
+            return false;
+        }
+
+        bool hasWad2 =
+            false;
+
+        bool hasWad3 =
+            false;
+
+        foreach (Match extension in extensions)
+        {
+            string value =
+                extension.Groups["extension"].Value;
+
+            if (string.Equals(
+                    value,
+                    ".D",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                hasWad2 =
+                    true;
+            }
+            else if (string.Equals(
+                         value,
+                         ".C",
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                hasWad3 =
+                    true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return hasWad2 &&
+            hasWad3;
     }
 
     private static void CopyOptionalTextureDirectory(
