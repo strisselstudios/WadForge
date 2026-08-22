@@ -35,6 +35,10 @@ public partial class MainWindow
         _mapLifecycleService =
             new();
 
+    private readonly CompanionProjectWadService
+        _projectWadService =
+            new();
+
     private readonly CompanionProjectLayout
         _projectLayout =
             new();
@@ -1061,6 +1065,10 @@ public partial class MainWindow
             {
                 return false;
             }
+
+            _projectWadService.SynchronizeMapWorldspawnWads(
+                _projectSession,
+                activeMapPath);
         }
 
         CompanionTrenchBroomMapIdentityService.EnsureMapIdentity(

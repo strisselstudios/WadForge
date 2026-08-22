@@ -549,6 +549,9 @@ public partial class MainWindow : Window
                 .ToHashSet(
                     StringComparer.OrdinalIgnoreCase);
 
+        bool addToCurrentProject =
+            _projectSession is not null;
+
         int addedCount = 0;
         int duplicateCount = 0;
         int unsupportedCount = 0;
@@ -581,7 +584,29 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            if (!existingPaths.Add(fullPath))
+            string registrationPath =
+                fullPath;
+
+            if (addToCurrentProject)
+            {
+                try
+                {
+                    registrationPath =
+                        _projectWadService
+                            .ImportIntoProject(
+                                _projectSession!,
+                                fullPath)
+                            .WadPath;
+                }
+                catch
+                {
+                    unsupportedCount++;
+                    continue;
+                }
+            }
+
+            if (!existingPaths.Add(
+                    registrationPath))
             {
                 duplicateCount++;
                 continue;
@@ -589,7 +614,7 @@ public partial class MainWindow : Window
 
             RegisteredWads.Add(
                 WadRegistrationService.Inspect(
-                    fullPath));
+                    registrationPath));
 
             addedCount++;
         }
@@ -604,7 +629,9 @@ public partial class MainWindow : Window
         List<string> statusParts = new();
 
         statusParts.Add(
-            $"{addedCount:N0} WAD archive(s) registered by {sourceDescription}");
+            addToCurrentProject
+                ? $"{addedCount:N0} WAD archive(s) added to the current project by {sourceDescription}"
+                : $"{addedCount:N0} WAD archive(s) registered by {sourceDescription}");
 
         if (duplicateCount > 0)
         {
@@ -615,7 +642,7 @@ public partial class MainWindow : Window
         if (unsupportedCount > 0)
         {
             statusParts.Add(
-                $"{unsupportedCount:N0} unsupported item(s) skipped");
+                $"{unsupportedCount:N0} unsupported or conflicting item(s) skipped");
         }
 
         StatusText.Text =
