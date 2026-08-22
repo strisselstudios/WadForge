@@ -861,8 +861,11 @@ public partial class MainWindow
 
         try
         {
-            PrepareActiveMapForTrenchBroom(
-                activeMapPath);
+            if (!PrepareActiveMapForTrenchBroom(
+                    activeMapPath))
+            {
+                return;
+            }
         }
         catch (Exception exception)
         {
@@ -1022,7 +1025,7 @@ public partial class MainWindow
         }
     }
 
-    private void PrepareActiveMapForTrenchBroom(
+    private bool PrepareActiveMapForTrenchBroom(
         string activeMapPath)
     {
         if (_projectSession is null ||
@@ -1053,11 +1056,89 @@ public partial class MainWindow
 
             CompanionDuskTrenchBroomEnvironmentService.Ensure(
                 _installation.ExecutablePath);
+
+            if (!EnsureDuskAuthoringResources())
+            {
+                return false;
+            }
         }
 
         CompanionTrenchBroomMapIdentityService.EnsureMapIdentity(
             activeMapPath,
             gameId);
+
+        return true;
+    }
+
+    private bool EnsureDuskAuthoringResources()
+    {
+        if (_installation is null)
+        {
+            throw new InvalidOperationException(
+                "A TrenchBroom installation is required.");
+        }
+
+        CompanionDuskAuthoringResourceStatus status =
+            CompanionDuskAuthoringResourceService.GetStatus(
+                _installation.ExecutablePath);
+
+        if (status.IsReady)
+        {
+            return true;
+        }
+
+        MessageBoxResult choice =
+            MessageBox.Show(
+                this,
+                "DUSK's TrenchBroom authoring resources have not been installed into Companion yet." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Companion needs the DUSK mapping resource bundle containing dusk4.fgd, dusk.pak, and palette.lmp. " +
+                "These are authoring resources; your actual DUSK installation and SDK remain separate." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Select the folder where you extracted those DUSK mapping resources now?",
+                "DUSK Authoring Resources",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+        if (choice !=
+            MessageBoxResult.Yes)
+        {
+            StatusText.Text =
+                "DUSK authoring resources are still required before opening this map.";
+
+            return false;
+        }
+
+        OpenFolderDialog dialog =
+            new()
+            {
+                Title =
+                    "Select DUSK mapping resource folder",
+
+                Multiselect =
+                    false
+            };
+
+        if (dialog.ShowDialog(
+                this) != true)
+        {
+            StatusText.Text =
+                "DUSK authoring resource setup was canceled.";
+
+            return false;
+        }
+
+        CompanionDuskAuthoringResourceImportResult result =
+            CompanionDuskAuthoringResourceService.Import(
+                _installation.ExecutablePath,
+                dialog.FolderName);
+
+        StatusText.Text =
+            $"Installed DUSK authoring resources from '{result.SourceDirectory}'.";
+
+        return true;
     }
 
     private void ProjectMapComboBox_SelectionChanged(
