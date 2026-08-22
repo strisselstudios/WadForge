@@ -835,6 +835,30 @@ public partial class MainWindow
             return;
         }
 
+        bool useManagedPortableDusk =
+            string.Equals(
+                _projectSession.Project.GameId,
+                CompanionGameProfiles.Dusk.Id,
+                StringComparison.OrdinalIgnoreCase) &&
+            IsManagedTrenchBroom();
+
+        if (useManagedPortableDusk &&
+            IsManagedTrenchBroomProcessRunning())
+        {
+            MessageBox.Show(
+                this,
+                "Companion-managed TrenchBroom is already running." +
+                Environment.NewLine +
+                Environment.NewLine +
+                "Close the existing TrenchBroom window before opening another DUSK map from Companion. " +
+                "Companion blocks a second portable instance so TrenchBroom's preferences cannot be locked by two processes.",
+                "TrenchBroom Already Open",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
         try
         {
             PrepareActiveMapForTrenchBroom(
@@ -866,6 +890,25 @@ public partial class MainWindow
                     false
             };
 
+        if (useManagedPortableDusk)
+        {
+            try
+            {
+                RemoveStalePortablePreferenceLock(
+                    workingDirectory);
+            }
+            catch (Exception exception)
+            {
+                ShowProjectError(
+                    exception.Message);
+
+                return;
+            }
+
+            startInfo.ArgumentList.Add(
+                "--portable");
+        }
+
         startInfo.ArgumentList.Add(
             Path.GetFullPath(
                 activeMapPath));
@@ -875,6 +918,108 @@ public partial class MainWindow
 
         StatusText.Text =
             $"Opened '{Path.GetFileName(activeMapPath)}' in TrenchBroom.";
+    }
+
+    private bool IsManagedTrenchBroomProcessRunning()
+    {
+        if (_installation is null)
+        {
+            return false;
+        }
+
+        string managedExecutablePath;
+
+        try
+        {
+            managedExecutablePath =
+                Path.GetFullPath(
+                    _installation.ExecutablePath);
+        }
+        catch
+        {
+            return true;
+        }
+
+        string processName =
+            Path.GetFileNameWithoutExtension(
+                managedExecutablePath);
+
+        Process[] processes =
+            Process.GetProcessesByName(
+                processName);
+
+        try
+        {
+            foreach (Process process in processes)
+            {
+                try
+                {
+                    string? processPath =
+                        process.MainModule?.FileName;
+
+                    if (string.IsNullOrWhiteSpace(
+                            processPath))
+                    {
+                        return true;
+                    }
+
+                    if (string.Equals(
+                            Path.GetFullPath(
+                                processPath),
+                            managedExecutablePath,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // A same-name process that cannot be inspected
+                    // is treated conservatively as active.
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        finally
+        {
+            foreach (Process process in processes)
+            {
+                process.Dispose();
+            }
+        }
+    }
+
+    private static void RemoveStalePortablePreferenceLock(
+        string workingDirectory)
+    {
+        string preferenceLockPath =
+            Path.Combine(
+                workingDirectory,
+                "config",
+                "Preferences.json.lock");
+
+        if (!File.Exists(
+                preferenceLockPath))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(
+                preferenceLockPath);
+        }
+        catch (Exception exception)
+            when (exception is IOException or
+                  UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(
+                "Companion found a TrenchBroom portable preferences lock that could not be cleared. " +
+                "Close every Companion-managed TrenchBroom window and try again.",
+                exception);
+        }
     }
 
     private void PrepareActiveMapForTrenchBroom(
