@@ -998,7 +998,7 @@ public partial class MainWindow
             Path.Combine(
                 workingDirectory,
                 "config",
-                "Preferences.json.lock");
+                "Preferences.json.lck");
 
         if (!File.Exists(
                 preferenceLockPath))
@@ -1049,6 +1049,9 @@ public partial class MainWindow
             }
 
             CompanionTrenchBroomGameConfigService.EnsureDuskGameConfig(
+                _installation.ExecutablePath);
+
+            CompanionDuskTrenchBroomEnvironmentService.Ensure(
                 _installation.ExecutablePath);
         }
 
