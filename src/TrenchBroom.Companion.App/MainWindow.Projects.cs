@@ -47,15 +47,7 @@ public partial class MainWindow
 
     private string? _gameInstallationDirectory;
 
-    private Button? _gameFolderButton;
-
-    private Button? _newMapButton;
-
-    private Button? _mapActionsButton;
-
-    private ComboBox? _mapSelectorComboBox;
-
-    private bool _refreshingMapSelector;
+    private bool _refreshingMapList;
 
     protected override void OnContentRendered(
         EventArgs e)
@@ -70,261 +62,19 @@ public partial class MainWindow
     private void EnsureProjectControls()
     {
         ImportMapButton.Content =
-            "Add Map";
+            "Add Existing";
 
-        OpenProjectFolderButton.Content =
-            "Project Files";
+        NewMapButton.Content =
+            "+ New Map";
 
         OpenCurrentMapButton.Content =
-            "Open Map in TrenchBroom";
+            "Open in TrenchBroom";
 
-        if (ImportMapButton.Parent is not
-            Panel buttonPanel)
-        {
-            return;
-        }
+        CompileSettingsButton.Content =
+            "Compile Settings";
 
-        if (_mapSelectorComboBox is null)
-        {
-            _mapSelectorComboBox =
-                new ComboBox
-                {
-                    Width =
-                        230,
-
-                    MinWidth =
-                        210,
-
-                    Height =
-                        38,
-
-                    Margin =
-                        new Thickness(
-                            0,
-                            0,
-                            10,
-                            10),
-
-                    HorizontalContentAlignment =
-                        HorizontalAlignment.Stretch,
-
-                    VerticalContentAlignment =
-                        VerticalAlignment.Center,
-
-                    ItemTemplate =
-                        FindResource(
-                            "MapChoiceTemplate")
-                        as DataTemplate,
-
-                    IsEnabled =
-                        false,
-
-                    ToolTip =
-                        "Current project map"
-                };
-
-            _mapSelectorComboBox.SelectionChanged +=
-                ProjectMapComboBox_SelectionChanged;
-
-            int insertionIndex =
-                buttonPanel.Children.IndexOf(
-                    ImportMapButton);
-
-            if (insertionIndex < 0)
-            {
-                insertionIndex = 0;
-            }
-
-            buttonPanel.Children.Insert(
-                insertionIndex,
-                _mapSelectorComboBox);
-        }
-
-        if (_mapActionsButton is null)
-        {
-            _mapActionsButton =
-                new Button
-                {
-                    Content =
-                        "Map Actions",
-
-                    Style =
-                        FindResource(
-                            "DarkButtonStyle")
-                        as Style,
-
-                    Margin =
-                        new Thickness(
-                            0,
-                            0,
-                            10,
-                            10),
-
-                    IsEnabled =
-                        false,
-
-                    ToolTip =
-                        "Remove the selected map from the project or move it safely to project backups"
-                };
-
-            ContextMenu mapActionsMenu =
-                new()
-                {
-                    Style =
-                        FindResource(
-                            "DarkContextMenuStyle")
-                        as Style,
-
-                    Placement =
-                        System.Windows.Controls.Primitives.PlacementMode.Bottom
-                };
-
-            MenuItem removeFromProjectItem =
-                new()
-                {
-                    Header =
-                        "Remove from Project",
-
-                    Style =
-                        FindResource(
-                            "DarkMenuItemStyle")
-                        as Style
-                };
-
-            removeFromProjectItem.Click +=
-                RemoveMapFromProject_Click;
-
-            MenuItem deleteMapSafelyItem =
-                new()
-                {
-                    Header =
-                        "Delete Map Safely",
-
-                    Style =
-                        FindResource(
-                            "DarkMenuItemStyle")
-                        as Style
-                };
-
-            deleteMapSafelyItem.Click +=
-                DeleteMapSafely_Click;
-
-            mapActionsMenu.Items.Add(
-                removeFromProjectItem);
-
-            mapActionsMenu.Items.Add(
-                deleteMapSafelyItem);
-
-            _mapActionsButton.ContextMenu =
-                mapActionsMenu;
-
-            _mapActionsButton.Click +=
-                MapActions_Click;
-
-            int insertionIndex =
-                buttonPanel.Children.IndexOf(
-                    ImportMapButton);
-
-            if (insertionIndex < 0)
-            {
-                insertionIndex =
-                    buttonPanel.Children.Count;
-            }
-
-            buttonPanel.Children.Insert(
-                insertionIndex,
-                _mapActionsButton);
-        }
-
-        if (_newMapButton is null)
-        {
-            _newMapButton =
-                new Button
-                {
-                    Content =
-                        "New Map",
-
-                    Style =
-                        FindResource(
-                            "DarkButtonStyle")
-                        as Style,
-
-                    Margin =
-                        new Thickness(
-                            0,
-                            0,
-                            10,
-                            10),
-
-                    IsEnabled =
-                        false,
-
-                    ToolTip =
-                        "Create a new empty map in this project"
-                };
-
-            _newMapButton.Click +=
-                NewMap_Click;
-
-            int insertionIndex =
-                buttonPanel.Children.IndexOf(
-                    ImportMapButton);
-
-            if (insertionIndex < 0)
-            {
-                insertionIndex =
-                    buttonPanel.Children.Count;
-            }
-
-            buttonPanel.Children.Insert(
-                insertionIndex,
-                _newMapButton);
-        }
-
-        if (_gameFolderButton is null)
-        {
-            _gameFolderButton =
-                new Button
-                {
-                    Content =
-                        "Game Folder",
-
-                    Style =
-                        FindResource(
-                            "DarkButtonStyle")
-                        as Style,
-
-                    Margin =
-                        new Thickness(
-                            0,
-                            0,
-                            10,
-                            10),
-
-                    IsEnabled =
-                        false,
-
-                    ToolTip =
-                        "Open the runtime mod folder used by the selected game"
-                };
-
-            _gameFolderButton.Click +=
-                OpenGameFolder_Click;
-
-            int insertionIndex =
-                buttonPanel.Children.IndexOf(
-                    OpenCurrentMapButton);
-
-            if (insertionIndex < 0)
-            {
-                insertionIndex =
-                    buttonPanel.Children.Count;
-            }
-
-            buttonPanel.Children.Insert(
-                insertionIndex,
-                _gameFolderButton);
-        }
+        CompileSettingsButton.ToolTip =
+            "Configure compiler options for this project";
     }
 
     private void NewProject_Click(
@@ -604,30 +354,144 @@ public partial class MainWindow
         }
     }
 
-    private void MapActions_Click(
+    private void ProjectUtilities_Click(
         object sender,
         RoutedEventArgs e)
     {
-        if (_projectSession is null ||
-            _mapSelectorComboBox?.SelectedItem is not
-                CompanionMapChoice)
-        {
-            return;
-        }
-
-        if (_mapActionsButton?.ContextMenu is not
-            ContextMenu menu)
+        if (sender is not
+                Button button ||
+            button.ContextMenu is not
+                ContextMenu menu)
         {
             return;
         }
 
         menu.PlacementTarget =
-            _mapActionsButton;
+            button;
 
         menu.Placement =
             System.Windows.Controls.Primitives.PlacementMode.Bottom;
 
         menu.IsOpen =
+            true;
+    }
+
+    private void ProjectMapOverflow_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_projectSession is null ||
+            sender is not
+                Button button ||
+            button.Tag is not
+                CompanionMapChoice selectedMap)
+        {
+            return;
+        }
+
+        ProjectMapListBox.SelectedItem =
+            selectedMap;
+
+        ContextMenu menu =
+            new()
+            {
+                Style =
+                    FindResource(
+                        "DarkContextMenuStyle")
+                    as Style,
+
+                Placement =
+                    System.Windows.Controls.Primitives.PlacementMode.Bottom
+            };
+
+        MenuItem openItem =
+            new()
+            {
+                Header =
+                    "Open in TrenchBroom",
+
+                Style =
+                    FindResource(
+                        "DarkMenuItemStyle")
+                    as Style
+            };
+
+        openItem.Click +=
+            OpenCurrentMap_Click;
+
+        MenuItem compileSettingsItem =
+            new()
+            {
+                Header =
+                    "Compile Settings",
+
+                IsEnabled =
+                    string.Equals(
+                        _projectSession.Project.GameId,
+                        CompanionGameProfiles.Dusk.Id,
+                        StringComparison.OrdinalIgnoreCase),
+
+                Style =
+                    FindResource(
+                        "DarkMenuItemStyle")
+                    as Style
+            };
+
+        compileSettingsItem.Click +=
+            CompileSettings_Click;
+
+        MenuItem removeItem =
+            new()
+            {
+                Header =
+                    "Remove from Project",
+
+                Style =
+                    FindResource(
+                        "DarkMenuItemStyle")
+                    as Style
+            };
+
+        removeItem.Click +=
+            RemoveMapFromProject_Click;
+
+        MenuItem deleteItem =
+            new()
+            {
+                Header =
+                    "Delete Map Safely",
+
+                Style =
+                    FindResource(
+                        "DarkMenuItemStyle")
+                    as Style
+            };
+
+        deleteItem.Click +=
+            DeleteMapSafely_Click;
+
+        menu.Items.Add(
+            openItem);
+
+        menu.Items.Add(
+            compileSettingsItem);
+
+        menu.Items.Add(
+            new Separator());
+
+        menu.Items.Add(
+            removeItem);
+
+        menu.Items.Add(
+            deleteItem);
+
+        menu.PlacementTarget =
+            button;
+
+        menu.IsOpen =
+            true;
+
+        e.Handled =
             true;
     }
 
@@ -740,7 +604,7 @@ public partial class MainWindow
 
     private CompanionMapChoice? GetSelectedMapChoice()
     {
-        return _mapSelectorComboBox?.SelectedItem as
+        return ProjectMapListBox.SelectedItem as
             CompanionMapChoice;
     }
 
@@ -800,6 +664,94 @@ public partial class MainWindow
                 UseShellExecute =
                     true
             });
+    }
+
+    private void CompileSettings_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_projectSession is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(
+                _projectSession.Project.GameId,
+                CompanionGameProfiles.Dusk.Id,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            ShowProjectError(
+                "Compile Settings are currently implemented for DUSK projects only.");
+
+            return;
+        }
+
+        if (IsManagedTrenchBroomProcessRunning())
+        {
+            MessageBox.Show(
+                this,
+                "Close Companion-managed TrenchBroom before changing Compile Settings. " +
+                "Companion regenerates the managed compile profile when settings are saved.",
+                "Close TrenchBroom",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        try
+        {
+            string toolchainVersion =
+                CompanionEricwToolchainService.RecommendedVersion;
+
+            CompanionCompilerOptionSchema schema =
+                CompanionCompilerOptionSchemaService.GetRequired(
+                    CompanionGameProfiles.Dusk.Id,
+                    toolchainVersion);
+
+            CompanionBuildSettings settings =
+                CompanionBuildSettingsService.Load(
+                    _projectSession.ProjectDirectory,
+                    CompanionGameProfiles.Dusk.Id,
+                    toolchainVersion);
+
+            CompanionBuildSettingsDialog dialog =
+                new(
+                    _projectSession.Project.Name,
+                    schema,
+                    settings)
+                {
+                    Owner =
+                        this
+                };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            CompanionBuildSettingsService.Save(
+                _projectSession.ProjectDirectory,
+                CompanionGameProfiles.Dusk.Id,
+                toolchainVersion,
+                dialog.SelectedSettings);
+
+            if (_installation is not null &&
+                IsManagedTrenchBroom() &&
+                !string.IsNullOrWhiteSpace(
+                    GetRuntimeModDirectory()))
+            {
+                PrepareDuskCompilerProfile();
+            }
+
+            StatusText.Text =
+                "Compile Settings saved. The Companion - DUSK compile profile has been refreshed.";
+        }
+        catch (Exception exception)
+        {
+            ShowProjectError(
+                exception.Message);
+        }
     }
 
     private void OpenCurrentMap_Click(
@@ -1193,11 +1145,18 @@ public partial class MainWindow
                 _projectSession.ProjectDirectory,
                 "build"));
 
+        CompanionBuildSettings buildSettings =
+            CompanionBuildSettingsService.Load(
+                _projectSession.ProjectDirectory,
+                CompanionGameProfiles.Dusk.Id,
+                toolchain.Version);
+
         CompanionTrenchBroomCompilationProfileResult result =
             CompanionTrenchBroomCompilationProfileService.EnsureDuskProfile(
                 _installation.ExecutablePath,
                 toolchain,
-                runtimeModDirectory);
+                runtimeModDirectory,
+                buildSettings);
 
         if (string.IsNullOrWhiteSpace(
                 _gameInstallationDirectory))
@@ -1215,13 +1174,13 @@ public partial class MainWindow
             $"DUSK tooling ready — ericw-tools {toolchain.Version}, compile profile '{result.ProfileName}', and launch profile '{engineProfile.ProfileName}' are configured.";
     }
 
-    private void ProjectMapComboBox_SelectionChanged(
+    private void ProjectMapListBox_SelectionChanged(
         object sender,
         SelectionChangedEventArgs e)
     {
-        if (_refreshingMapSelector ||
+        if (_refreshingMapList ||
             _projectSession is null ||
-            _mapSelectorComboBox?.SelectedItem is not
+            ProjectMapListBox.SelectedItem is not
                 CompanionMapChoice selectedMap)
         {
             return;
@@ -1246,6 +1205,20 @@ public partial class MainWindow
 
             RefreshProjectInterface();
         }
+    }
+
+    private void ProjectMapListBox_MouseDoubleClick(
+        object sender,
+        System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (GetSelectedMapChoice() is null)
+        {
+            return;
+        }
+
+        OpenCurrentMap_Click(
+            sender,
+            e);
     }
 
     private void EnsureManagedDataRootForProject(
@@ -1626,31 +1599,16 @@ public partial class MainWindow
             ImportMapButton.IsEnabled =
                 false;
 
-            if (_newMapButton is not null)
-            {
-                _newMapButton.IsEnabled =
-                    false;
-            }
-
-            if (_mapActionsButton is not null)
-            {
-                _mapActionsButton.IsEnabled =
-                    false;
-            }
-
-            OpenProjectFolderButton.IsEnabled =
+            NewMapButton.IsEnabled =
                 false;
 
             OpenCurrentMapButton.IsEnabled =
                 false;
 
-            if (_gameFolderButton is not null)
-            {
-                _gameFolderButton.IsEnabled =
-                    false;
-            }
+            CompileSettingsButton.IsEnabled =
+                false;
 
-            RefreshMapSelector(
+            RefreshMapList(
                 activeMapPath: null);
 
             return;
@@ -1751,21 +1709,8 @@ public partial class MainWindow
         ImportMapButton.IsEnabled =
             true;
 
-        if (_newMapButton is not null)
-        {
-            _newMapButton.IsEnabled =
-                true;
-        }
-
-        if (_mapActionsButton is not null)
-        {
-            _mapActionsButton.IsEnabled =
-                project.Maps.Count > 0;
-        }
-
-        OpenProjectFolderButton.IsEnabled =
-            Directory.Exists(
-                _projectSession.ProjectDirectory);
+        NewMapButton.IsEnabled =
+            true;
 
         OpenCurrentMapButton.IsEnabled =
             !string.IsNullOrWhiteSpace(
@@ -1773,41 +1718,36 @@ public partial class MainWindow
             File.Exists(
                 activeMapFullPath);
 
+        CompileSettingsButton.IsEnabled =
+            string.Equals(
+                project.GameId,
+                CompanionGameProfiles.Dusk.Id,
+                StringComparison.OrdinalIgnoreCase);
+
         string? runtimeDirectory =
             GetRuntimeModDirectory();
 
-        if (_gameFolderButton is not null)
-        {
-            _gameFolderButton.IsEnabled =
-                !string.IsNullOrWhiteSpace(
-                    runtimeDirectory) &&
-                Directory.Exists(
-                    runtimeDirectory);
-        }
-
-        RefreshMapSelector(
+        RefreshMapList(
             activeMapFullPath);
     }
 
-    private void RefreshMapSelector(
+    private void RefreshMapList(
         string? activeMapPath)
     {
-        if (_mapSelectorComboBox is null)
-        {
-            return;
-        }
-
-        _refreshingMapSelector =
+        _refreshingMapList =
             true;
 
         try
         {
-            _mapSelectorComboBox.Items.Clear();
+            ProjectMapListBox.Items.Clear();
 
             if (_projectSession is null)
             {
-                _mapSelectorComboBox.IsEnabled =
+                ProjectMapListBox.IsEnabled =
                     false;
+
+                EmptyProjectMapsText.Visibility =
+                    Visibility.Visible;
 
                 return;
             }
@@ -1847,7 +1787,7 @@ public partial class MainWindow
                             : map.DisplayName,
                         fullPath);
 
-                _mapSelectorComboBox.Items.Add(
+                ProjectMapListBox.Items.Add(
                     choice);
 
                 if (!string.IsNullOrWhiteSpace(
@@ -1862,32 +1802,25 @@ public partial class MainWindow
                 }
             }
 
-            _mapSelectorComboBox.SelectedItem =
+            ProjectMapListBox.SelectedItem =
                 activeChoice ??
                 (
-                    _mapSelectorComboBox.Items.Count > 0
-                        ? _mapSelectorComboBox.Items[0]
+                    ProjectMapListBox.Items.Count > 0
+                        ? ProjectMapListBox.Items[0]
                         : null
                 );
 
-            if (_mapSelectorComboBox.SelectedItem is
-                CompanionMapChoice selectedChoice)
-            {
-                _mapSelectorComboBox.ToolTip =
-                    selectedChoice.DisplayName;
-            }
-            else
-            {
-                _mapSelectorComboBox.ToolTip =
-                    "Current project map";
-            }
+            ProjectMapListBox.IsEnabled =
+                ProjectMapListBox.Items.Count > 0;
 
-            _mapSelectorComboBox.IsEnabled =
-                _mapSelectorComboBox.Items.Count > 0;
+            EmptyProjectMapsText.Visibility =
+                ProjectMapListBox.Items.Count > 0
+                    ? Visibility.Collapsed
+                    : Visibility.Visible;
         }
         finally
         {
-            _refreshingMapSelector =
+            _refreshingMapList =
                 false;
         }
     }

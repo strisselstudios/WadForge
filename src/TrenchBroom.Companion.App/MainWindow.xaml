@@ -272,7 +272,8 @@
                                 CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
-                                              RecognizesAccessKey="True" />
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -294,6 +295,7 @@
         </Style>
 
         <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource DarkButtonStyle}">
+            <Setter Property="Foreground" Value="#FFFFFF" />
             <Setter Property="Background" Value="#2768AE" />
             <Setter Property="BorderBrush" Value="#5EA2FF" />
         </Style>
@@ -319,7 +321,8 @@
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="Center" />
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -341,6 +344,68 @@
             <Setter Property="Background" Value="#1D3652" />
             <Setter Property="BorderBrush" Value="#315F94" />
             <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="IconButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource DarkButtonStyle}">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="FontSize" Value="16" />
+        </Style>
+
+        <Style x:Key="ProjectMapListStyle"
+               TargetType="ListBox">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+        </Style>
+
+        <Style x:Key="ProjectMapListItemStyle"
+               TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="MapRowBorder"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Stretch"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="MapRowBorder" Property="Background" Value="#182432" />
+                                <Setter TargetName="MapRowBorder" Property="BorderBrush" Value="#33475D" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="MapRowBorder" Property="Background" Value="#1D3652" />
+                                <Setter TargetName="MapRowBorder" Property="BorderBrush" Value="#5EA2FF" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#718094" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="CardStyle" TargetType="Border">
@@ -564,21 +629,172 @@
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="16" />
+                                <RowDefinition Height="14" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="14" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <Grid>
+
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock FontSize="18" FontWeight="SemiBold" Text="Maps" />
-                                    <TextBlock Margin="0,4,0,0" Foreground="{StaticResource SecondaryTextBrush}" Text="Create, import, select, and open maps in TrenchBroom." />
+                                    <TextBlock Margin="0,4,0,0"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                               Text="Choose a map to work on, or add another map to this project." />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <Button x:Name="NewMapButton"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Foreground="#FFFFFF"
+                                            IsEnabled="False"
+                                            Click="NewMap_Click"
+                                            Content="+ New Map" />
+                                    <Button x:Name="ImportMapButton"
+                                            Style="{StaticResource DarkButtonStyle}"
+                                            Foreground="#FFFFFF"
+                                            IsEnabled="False"
+                                            Click="ImportMap_Click"
+                                            Content="Add Existing" />
+                                    <Button x:Name="ProjectUtilitiesButton"
+                                            Width="42"
+                                            Style="{StaticResource IconButtonStyle}"
+                                            Foreground="#FFFFFF"
+                                            Click="ProjectUtilities_Click"
+                                            Content="⋯"
+                                            ToolTip="Project folders">
+                                        <Button.ContextMenu>
+                                            <ContextMenu Style="{StaticResource DarkContextMenuStyle}">
+                                                <MenuItem
+                                                          Header="Project Files"
+                                                          Style="{StaticResource DarkMenuItemStyle}"
+                                                          Click="OpenProjectFolder_Click" />
+                                                <MenuItem
+                                                          Header="Game Folder"
+                                                          Style="{StaticResource DarkMenuItemStyle}"
+                                                          Click="OpenGameFolder_Click" />
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
                                 </StackPanel>
                             </Grid>
-                            <Border Grid.Row="2" Padding="14,14,4,4" Background="#121922" BorderBrush="#283544" BorderThickness="1" CornerRadius="7">
-                                <WrapPanel x:Name="MapActionPanel">
-                                    <Button x:Name="ImportMapButton" Style="{StaticResource DarkButtonStyle}" Margin="0,0,10,10" IsEnabled="False" Click="ImportMap_Click" Content="Import Map" />
-                                    <Button x:Name="OpenProjectFolderButton" Style="{StaticResource DarkButtonStyle}" Margin="0,0,10,10" IsEnabled="False" Click="OpenProjectFolder_Click" Content="Project Folder" />
-                                    <Button x:Name="OpenCurrentMapButton" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,10" MinWidth="205" IsEnabled="False" Click="OpenCurrentMap_Click" Content="Open in TrenchBroom" />
-                                </WrapPanel>
+
+                            <Border Grid.Row="2"
+                                    MinHeight="92"
+                                    MaxHeight="320"
+                                    Background="#111820"
+                                    BorderBrush="#2F3D4D"
+                                    BorderThickness="1"
+                                    CornerRadius="7">
+                                <Grid>
+                                    <ListBox x:Name="ProjectMapListBox"
+                                             Style="{StaticResource ProjectMapListStyle}"
+                                             ItemContainerStyle="{StaticResource ProjectMapListItemStyle}"
+                                             SelectionChanged="ProjectMapListBox_SelectionChanged"
+                                             MouseDoubleClick="ProjectMapListBox_MouseDoubleClick">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="2,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Foreground="#FFFFFF"
+                                                                   FontSize="14"
+                                                                   FontWeight="SemiBold"
+                                                                   Text="{Binding DisplayName}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   ToolTip="{Binding FullPath}" />
+                                                        <TextBlock Margin="0,3,0,0"
+                                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                                   FontSize="11"
+                                                                   Text="Select to make current • Double-click to open"
+                                                                   IsHitTestVisible="False" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1"
+                                                            Width="34"
+                                                            Height="30"
+                                                            Margin="12,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Style="{StaticResource IconButtonStyle}"
+                                                            Foreground="#FFFFFF"
+                                                            Content="⋯"
+                                                            Tag="{Binding}"
+                                                            ToolTip="Map actions"
+                                                            Click="ProjectMapOverflow_Click" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <TextBlock x:Name="EmptyProjectMapsText"
+                                               Margin="20"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               Text="No maps yet. Create a new map or add an existing .map file."
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               IsHitTestVisible="False" />
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="4"
+                                    Padding="14"
+                                    Background="#121A24"
+                                    BorderBrush="#2F3D4D"
+                                    BorderThickness="1"
+                                    CornerRadius="7">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="14" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="10"
+                                                   FontWeight="Bold"
+                                                   Text="PROJECT WORKFLOW" />
+                                        <TextBlock Margin="0,4,0,0"
+                                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                                   FontSize="12"
+                                                   Text="Assets → Compile Settings → TrenchBroom → Compile → Launch" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Center">
+                                        <Button x:Name="ManageAssetsButton"
+                                                Tag="Assets"
+                                                Style="{StaticResource DarkButtonStyle}"
+                                                Foreground="#FFFFFF"
+                                                Click="ShellNavigation_Click"
+                                                Content="Manage Assets" />
+                                        <Button x:Name="CompileSettingsButton"
+                                                Style="{StaticResource DarkButtonStyle}"
+                                                Foreground="#FFFFFF"
+                                                IsEnabled="False"
+                                                Click="CompileSettings_Click"
+                                                Content="Compile Settings" />
+                                    </StackPanel>
+                                    <Button x:Name="OpenCurrentMapButton"
+                                            Grid.Column="3"
+                                            MinWidth="205"
+                                            Margin="4,0,0,0"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Foreground="#FFFFFF"
+                                            IsEnabled="False"
+                                            Click="OpenCurrentMap_Click"
+                                            Content="Open in TrenchBroom" />
+                                </Grid>
                             </Border>
                         </Grid>
                     </Border>
