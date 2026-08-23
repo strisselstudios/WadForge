@@ -21,9 +21,6 @@ public sealed record CompanionDuskAuthoringResourceImportResult(
 
 public static class CompanionDuskAuthoringResourceService
 {
-    private const string ManagedAuthoringDirectoryName =
-        "DUSK-Authoring";
-
     private const string ManagedGameDirectoryName =
         "id1";
 
@@ -331,11 +328,10 @@ public static class CompanionDuskAuthoringResourceService
             throw new InvalidOperationException(
                 "Could not determine the Companion-managed TrenchBroom directory.");
 
-        string suiteDirectory =
-            Path.GetDirectoryName(
-                trenchBroomDirectory) ??
-            throw new InvalidOperationException(
-                "Could not determine the Companion-managed TrenchBroom suite directory.");
+        string managedDataRoot =
+            CompanionManagedDataRootService
+                .GetRootFromManagedTrenchBroomExecutable(
+                    executablePath);
 
         string gameConfigDirectory =
             Path.Combine(
@@ -344,9 +340,9 @@ public static class CompanionDuskAuthoringResourceService
                 "DUSK");
 
         string authoringDirectory =
-            Path.Combine(
-                suiteDirectory,
-                ManagedAuthoringDirectoryName);
+            CompanionManagedDataRootService
+                .GetDuskAuthoringDirectory(
+                    managedDataRoot);
 
         string id1Directory =
             Path.Combine(

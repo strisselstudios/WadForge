@@ -39,6 +39,13 @@ public partial class MainWindow : Window
                 exception.Message;
         }
 
+        if (CompanionManagedDataRootService
+            .TryInitializeFromExistingWorkspace(
+                _settings))
+        {
+            SaveSettings();
+        }
+
         LoadSavedState();
         ResolveTrenchBroomInstallation();
         RefreshInterface();
@@ -88,12 +95,29 @@ public partial class MainWindow : Window
 
     private void ResolveTrenchBroomInstallation()
     {
+        bool hasManagedRoot =
+            CompanionManagedDataRootService
+                .TryGetConfiguredRoot(
+                    _settings,
+                    out string managedDataRoot);
+
+        string managedExecutablePath =
+            hasManagedRoot
+                ? CompanionManagedDataRootService
+                    .GetTrenchBroomExecutablePath(
+                        managedDataRoot)
+                : string.Empty;
+
         TrenchBroomInstallationResolution resolution =
             TrenchBroomInstallationResolver.Resolve(
                 _settings.TrenchBroomExecutablePath,
-                AppContext.BaseDirectory);
+                AppContext.BaseDirectory,
+                managedExecutablePath,
+                TrenchBroomInstallationResolver
+                    .EnumerateDefaultDiscoveryCandidates());
 
-        if (resolution.Installation is not null &&
+        if (hasManagedRoot &&
+            resolution.Installation is not null &&
             resolution.Installation.IsValid &&
             resolution.Installation.IsWadForgeCompatible)
         {
@@ -122,6 +146,17 @@ public partial class MainWindow : Window
             SaveSettings();
         }
 
+        if (!hasManagedRoot &&
+            _installation is not null &&
+            _installation.IsValid &&
+            _installation.IsWadForgeCompatible)
+        {
+            StatusText.Text =
+                "Compatible TrenchBroom found. Create or open a project to choose Companion's managed data drive.";
+
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(
                 resolution.Status))
         {
@@ -141,10 +176,16 @@ public partial class MainWindow : Window
                 Path.GetFullPath(
                     compatibleInstallation.ExecutablePath);
 
+            string managedDataRoot =
+                CompanionManagedDataRootService
+                    .GetRequiredRoot(
+                        _settings);
+
             string managedExecutablePath =
                 Path.GetFullPath(
-                    TrenchBroomManagedInstallationService
-                        .DefaultManagedExecutablePath);
+                    CompanionManagedDataRootService
+                        .GetTrenchBroomExecutablePath(
+                            managedDataRoot));
 
             bool alreadyManaged =
                 string.Equals(
@@ -154,7 +195,8 @@ public partial class MainWindow : Window
 
             TrenchBroomManagedInstallationResult result =
                 TrenchBroomManagedInstallationService.Provision(
-                    sourceExecutablePath);
+                    sourceExecutablePath,
+                    managedExecutablePath);
 
             _installation =
                 result.Installation;
@@ -301,8 +343,11 @@ public partial class MainWindow : Window
                 Path.GetFullPath(
                     _installation.ExecutablePath),
                 Path.GetFullPath(
-                    TrenchBroomManagedInstallationService
-                        .DefaultManagedExecutablePath),
+                    CompanionManagedDataRootService
+                        .GetTrenchBroomExecutablePath(
+                            CompanionManagedDataRootService
+                                .GetRequiredRoot(
+                                    _settings))),
                 StringComparison.OrdinalIgnoreCase);
         }
         catch
@@ -393,6 +438,26 @@ public partial class MainWindow : Window
 
         if (inspection.IsWadForgeCompatible)
         {
+            if (!CompanionManagedDataRootService
+                    .TryGetConfiguredRoot(
+                        _settings,
+                        out _))
+            {
+                _installation =
+                    inspection;
+
+                _settings.TrenchBroomExecutablePath =
+                    inspection.ExecutablePath;
+
+                SaveSettings();
+
+                StatusText.Text =
+                    "Compatible TrenchBroom selected. It will be copied into Companion-managed storage after a project drive is chosen.";
+
+                RefreshInterface();
+                return;
+            }
+
             TryUseManagedTrenchBroom(
                 inspection,
                 "selected",

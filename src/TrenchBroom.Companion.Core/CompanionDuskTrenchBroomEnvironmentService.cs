@@ -16,9 +16,6 @@ public static class CompanionDuskTrenchBroomEnvironmentService
     public const string DuskGamePathPreferenceKey =
         "Games/DUSK/Path";
 
-    private const string ManagedDataDirectoryName =
-        "DUSK-Authoring";
-
     private const string DefaultGameDirectoryName =
         "id1";
 
@@ -26,7 +23,8 @@ public static class CompanionDuskTrenchBroomEnvironmentService
         ".trenchbroom-companion-managed";
 
     public static CompanionDuskTrenchBroomEnvironment Ensure(
-        string trenchBroomExecutablePath)
+        string trenchBroomExecutablePath,
+        string managedDataRoot)
     {
         if (string.IsNullOrWhiteSpace(
                 trenchBroomExecutablePath))
@@ -54,16 +52,32 @@ public static class CompanionDuskTrenchBroomEnvironmentService
             throw new InvalidOperationException(
                 "The Companion-managed TrenchBroom directory could not be resolved.");
 
-        string suiteDirectory =
-            Path.GetDirectoryName(
-                trenchBroomDirectory) ??
+        string expectedTrenchBroomDirectory =
+            CompanionManagedDataRootService
+                .GetTrenchBroomDirectory(
+                    managedDataRoot);
+
+        if (!string.Equals(
+                Path.GetFullPath(
+                    trenchBroomDirectory)
+                    .TrimEnd(
+                        Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(
+                    expectedTrenchBroomDirectory)
+                    .TrimEnd(
+                        Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase))
+        {
             throw new InvalidOperationException(
-                "The Companion-managed TrenchBroom suite directory could not be resolved.");
+                "The selected TrenchBroom executable is not inside Companion's configured managed data root.");
+        }
 
         string gamePath =
-            Path.Combine(
-                suiteDirectory,
-                ManagedDataDirectoryName);
+            CompanionManagedDataRootService
+                .GetDuskAuthoringDirectory(
+                    managedDataRoot);
 
         string id1Directory =
             Path.Combine(

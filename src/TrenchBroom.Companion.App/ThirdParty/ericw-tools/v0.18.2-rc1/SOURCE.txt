@@ -1,0 +1,9 @@
+Third-party component: ericw-tools
+Pinned release: v0.18.2-rc1
+Upstream: https://github.com/ericwa/ericw-tools
+Release: https://github.com/ericwa/ericw-tools/releases/tag/v0.18.2-rc1
+Binary asset: https://github.com/ericwa/ericw-tools/releases/download/v0.18.2-rc1/ericw-tools-v0.18.1-32-g6660c5f-win64.zip
+Corresponding source: https://github.com/ericwa/ericw-tools/archive/refs/tags/v0.18.2-rc1.zip
+
+The binary archive is distributed unmodified.
+The corresponding source archive and GPL license are packaged alongside it.

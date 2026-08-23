@@ -386,6 +386,9 @@ public partial class MainWindow
             _projectSession =
                 creation.Session;
 
+            EnsureManagedDataRootForProject(
+                _projectSession.ProjectDirectory);
+
             _gameInstallationDirectory =
                 creation
                     .ProvisionedProject
@@ -446,6 +449,9 @@ public partial class MainWindow
             _projectSession =
                 _projectManager.Open(
                     dialog.FileName);
+
+            EnsureManagedDataRootForProject(
+                _projectSession.ProjectDirectory);
 
             SelectProjectGame(
                 _projectSession.Project.GameId);
@@ -1059,7 +1065,10 @@ public partial class MainWindow
                 _installation.ExecutablePath);
 
             CompanionDuskTrenchBroomEnvironmentService.Ensure(
-                _installation.ExecutablePath);
+                _installation.ExecutablePath,
+                CompanionManagedDataRootService
+                    .GetRequiredRoot(
+                        _settings));
 
             if (!EnsureDuskAuthoringResources())
             {
@@ -1069,6 +1078,8 @@ public partial class MainWindow
             _projectWadService.SynchronizeMapWorldspawnWads(
                 _projectSession,
                 activeMapPath);
+
+            PrepareDuskCompilerProfile();
         }
 
         CompanionTrenchBroomMapIdentityService.EnsureMapIdentity(
@@ -1149,6 +1160,61 @@ public partial class MainWindow
         return true;
     }
 
+    private void PrepareDuskCompilerProfile()
+    {
+        if (_installation is null ||
+            _projectSession is null)
+        {
+            throw new InvalidOperationException(
+                "A Companion project and TrenchBroom installation are required.");
+        }
+
+        string managedDataRoot =
+            CompanionManagedDataRootService.GetRequiredRoot(
+                _settings);
+
+        CompanionEricwToolchainStatus toolchain =
+            CompanionEricwToolchainService.EnsureProvisioned(
+                AppContext.BaseDirectory,
+                managedDataRoot);
+
+        string? runtimeModDirectory =
+            GetRuntimeModDirectory();
+
+        if (string.IsNullOrWhiteSpace(
+                runtimeModDirectory))
+        {
+            throw new InvalidOperationException(
+                "Companion could not resolve this DUSK project's runtime folder for compiler deployment.");
+        }
+
+        Directory.CreateDirectory(
+            Path.Combine(
+                _projectSession.ProjectDirectory,
+                "build"));
+
+        CompanionTrenchBroomCompilationProfileResult result =
+            CompanionTrenchBroomCompilationProfileService.EnsureDuskProfile(
+                _installation.ExecutablePath,
+                toolchain,
+                runtimeModDirectory);
+
+        if (string.IsNullOrWhiteSpace(
+                _gameInstallationDirectory))
+        {
+            throw new InvalidOperationException(
+                "Companion could not resolve the DUSK installation required for the Moddable launcher profile.");
+        }
+
+        CompanionTrenchBroomEngineProfileResult engineProfile =
+            CompanionTrenchBroomEngineProfileService.EnsureDuskProfile(
+                _installation.ExecutablePath,
+                _gameInstallationDirectory);
+
+        StatusText.Text =
+            $"DUSK tooling ready — ericw-tools {toolchain.Version}, compile profile '{result.ProfileName}', and launch profile '{engineProfile.ProfileName}' are configured.";
+    }
+
     private void ProjectMapComboBox_SelectionChanged(
         object sender,
         SelectionChangedEventArgs e)
@@ -1180,6 +1246,27 @@ public partial class MainWindow
 
             RefreshProjectInterface();
         }
+    }
+
+    private void EnsureManagedDataRootForProject(
+        string projectDirectory)
+    {
+        bool configured =
+            CompanionManagedDataRootService
+                .EnsureConfiguredForProject(
+                    _settings,
+                    projectDirectory);
+
+        if (!configured)
+        {
+            return;
+        }
+
+        SaveSettings();
+        ResolveTrenchBroomInstallation();
+
+        StatusText.Text =
+            $"Companion managed storage: {_settings.ManagedDataRootPath}.";
     }
 
     private string? GetDefaultProjectsRoot()

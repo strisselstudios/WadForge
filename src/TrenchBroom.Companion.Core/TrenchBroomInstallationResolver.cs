@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace TrenchBroom.Companion.Core;
 
@@ -190,10 +190,16 @@ public static class TrenchBroomInstallationResolver
 
     public static string GetDefaultManagedExecutablePath()
     {
-        return Path.Combine(
-            CompanionSettingsStore.SettingsDirectory,
-            "TrenchBroom",
-            "TrenchBroom.exe");
+        CompanionSettings settings =
+            CompanionSettingsStore.Load();
+
+        string managedDataRoot =
+            CompanionManagedDataRootService.GetRequiredRoot(
+                settings);
+
+        return CompanionManagedDataRootService
+            .GetTrenchBroomExecutablePath(
+                managedDataRoot);
     }
 
     public static IReadOnlyList<string> EnumerateDefaultDiscoveryCandidates()

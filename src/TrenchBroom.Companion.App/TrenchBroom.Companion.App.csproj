@@ -7,10 +7,16 @@
     <RootNamespace>TrenchBroom.Companion.App</RootNamespace>
     <ApplicationIcon>Assets\TrenchBroom-Companion.ico</ApplicationIcon>
   </PropertyGroup>
-
   <ItemGroup>
     <None Remove="Assets\TrenchBroom-Companion.ico" />
     <Resource Include="Assets\TrenchBroom-Companion.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="ThirdParty\ericw-tools\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
