@@ -845,7 +845,7 @@
                                 </Grid>
                             </Border>
 
-                                                                                    <Border Grid.Row="4"
+                                                                                    <Border x:Name="ProjectWorkflowPanel" Grid.Row="4"
                                     Padding="14"
                                     Background="#121A24"
                                     BorderBrush="#2F3D4D"
@@ -859,15 +859,24 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0"
+                                                MaxWidth="410"
                                                 VerticalAlignment="Center">
                                         <TextBlock Foreground="{StaticResource MutedTextBrush}"
                                                    FontSize="10"
                                                    FontWeight="Bold"
-                                                   Text="PROJECT WORKFLOW" />
-                                        <TextBlock Margin="0,4,0,0"
+                                                   Text="NEXT STEP" />
+                                        <TextBlock x:Name="ProjectNextStepTitleText"
+                                                   Margin="0,4,0,0"
+                                                   Foreground="#FFFFFF"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Text="Choose a map" />
+                                        <TextBlock x:Name="ProjectNextStepDetailText"
+                                                   Margin="0,3,0,0"
                                                    Foreground="{StaticResource SecondaryTextBrush}"
-                                                   FontSize="12"
-                                                   Text="Assets → Compile Settings → TrenchBroom → Compile → Launch" />
+                                                   FontSize="11"
+                                                   Text="Select a map to continue."
+                                                   TextWrapping="Wrap" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2"
                                                 Orientation="Horizontal"

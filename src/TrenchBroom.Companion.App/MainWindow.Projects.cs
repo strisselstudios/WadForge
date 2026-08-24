@@ -2163,6 +2163,15 @@ public partial class MainWindow
             CompileSettingsButton.IsEnabled =
                 false;
 
+            ProjectWorkflowPanel.Visibility =
+                Visibility.Collapsed;
+
+            ProjectNextStepTitleText.Text =
+                string.Empty;
+
+            ProjectNextStepDetailText.Text =
+                string.Empty;
+
             RefreshMapList(
                 activeMapPath: null);
 
@@ -2279,11 +2288,145 @@ public partial class MainWindow
                 CompanionGameProfiles.Dusk.Id,
                 StringComparison.OrdinalIgnoreCase);
 
-        string? runtimeDirectory =
-            GetRuntimeModDirectory();
-
         RefreshMapList(
             activeMapFullPath);
+
+        RefreshProjectGuidance(
+            project,
+            activeMapFullPath);
+    }
+
+    private void RefreshProjectGuidance(
+        CompanionProjectManifest project,
+        string? activeMapFullPath)
+    {
+        ArgumentNullException.ThrowIfNull(
+            project);
+
+        string? effectiveMapPath =
+            activeMapFullPath;
+
+        if ((string.IsNullOrWhiteSpace(
+                 effectiveMapPath) ||
+             !File.Exists(
+                 effectiveMapPath)) &&
+            ProjectMapListBox.SelectedItem is
+                CompanionMapChoice selectedMap &&
+            File.Exists(
+                selectedMap.FullPath))
+        {
+            effectiveMapPath =
+                selectedMap.FullPath;
+        }
+
+        bool hasMap =
+            !string.IsNullOrWhiteSpace(
+                effectiveMapPath) &&
+            File.Exists(
+                effectiveMapPath);
+
+        ProjectWorkflowPanel.Visibility =
+            hasMap
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        if (!hasMap)
+        {
+            ProjectNextStepTitleText.Text =
+                string.Empty;
+
+            ProjectNextStepDetailText.Text =
+                string.Empty;
+
+            return;
+        }
+
+        string confirmedMapPath =
+            effectiveMapPath!;
+
+        string mapName =
+            Path.GetFileNameWithoutExtension(
+                confirmedMapPath) ??
+            Path.GetFileName(
+                confirmedMapPath) ??
+            "Map";
+
+        string wadDirectory =
+            Path.Combine(
+                _projectSession!.ProjectDirectory,
+                CompanionProjectLayout.WadsDirectoryName);
+
+        int wadCount =
+            0;
+
+        try
+        {
+            if (Directory.Exists(
+                    wadDirectory))
+            {
+                wadCount =
+                    Directory.GetFiles(
+                        wadDirectory,
+                        "*.wad",
+                        SearchOption.TopDirectoryOnly)
+                    .Length;
+            }
+        }
+        catch
+        {
+            wadCount =
+                0;
+        }
+
+        ProjectNextStepTitleText.Text =
+            $"Open {mapName} in TrenchBroom";
+
+        bool isDusk =
+            string.Equals(
+                project.GameId,
+                CompanionGameProfiles.Dusk.Id,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (isDusk)
+        {
+            ProjectNextStepDetailText.Text =
+                wadCount switch
+                {
+                    0 =>
+                        "Your map is ready. Add WADs with Manage Assets when you need project textures, or start mapping now.",
+
+                    1 =>
+                        "1 project WAD is available. Companion will keep its project reference synchronized when the map opens.",
+
+                    _ =>
+                        $"{wadCount:N0} project WADs are available. Companion will keep their project references synchronized when the map opens."
+                };
+
+            CompileSettingsButton.ToolTip =
+                "Configure compiler options for this DUSK project";
+        }
+        else
+        {
+            ProjectNextStepDetailText.Text =
+                wadCount == 0
+                    ? "Your map is ready to edit. Add project textures with Manage Assets whenever you need them."
+                    : wadCount == 1
+                        ? "1 project WAD is available. Continue editing the selected map in TrenchBroom."
+                        : $"{wadCount:N0} project WADs are available. Continue editing the selected map in TrenchBroom.";
+
+            CompileSettingsButton.ToolTip =
+                "Compile Settings are available for DUSK projects.";
+        }
+
+        ManageAssetsButton.ToolTip =
+            wadCount == 0
+                ? "Add project texture archives"
+                : wadCount == 1
+                    ? "Manage 1 project WAD"
+                    : $"Manage {wadCount:N0} project WADs";
+
+        OpenCurrentMapButton.ToolTip =
+            $"Open {mapName} in TrenchBroom";
     }
 
     private void RefreshMapList(
