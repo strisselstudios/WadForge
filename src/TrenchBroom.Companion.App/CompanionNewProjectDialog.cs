@@ -19,15 +19,25 @@ internal sealed class CompanionNewProjectDialog :
 
     private readonly ComboBox? _textureFormatComboBox;
 
+    private readonly CheckBox _createFirstMapCheckBox;
+
+    private readonly TextBox _firstMapNameTextBox;
+
     private readonly TextBlock _targetPathText;
 
+    private readonly string? _preferredDriveRoot;
+
     public CompanionNewProjectDialog(
-        CompanionGameProfile gameProfile)
+        CompanionGameProfile gameProfile,
+        string? preferredDriveRoot = null)
     {
         _gameProfile =
             gameProfile ??
             throw new ArgumentNullException(
                 nameof(gameProfile));
+
+        _preferredDriveRoot =
+            preferredDriveRoot;
 
         Title =
             "New Project";
@@ -61,6 +71,13 @@ internal sealed class CompanionNewProjectDialog :
                     new Thickness(
                         22)
             };
+
+        root.RowDefinitions.Add(
+            new RowDefinition
+            {
+                Height =
+                    GridLength.Auto
+            });
 
         root.RowDefinitions.Add(
             new RowDefinition
@@ -376,6 +393,139 @@ internal sealed class CompanionNewProjectDialog :
         root.Children.Add(
             textureFormatPanel);
 
+        StackPanel firstMapPanel =
+            new()
+            {
+                Margin =
+                    new Thickness(
+                        0,
+                        14,
+                        0,
+                        0)
+            };
+
+        firstMapPanel.Children.Add(
+            new TextBlock
+            {
+                Text =
+                    "First map",
+
+                Foreground =
+                    new SolidColorBrush(
+                        Color.FromRgb(
+                            190,
+                            198,
+                            209))
+            });
+
+        StackPanel firstMapControls =
+            new()
+            {
+                Margin =
+                    new Thickness(
+                        0,
+                        6,
+                        0,
+                        0),
+
+                Orientation =
+                    Orientation.Horizontal
+            };
+
+        _createFirstMapCheckBox =
+            new CheckBox
+            {
+                Content =
+                    "Create first map",
+
+                IsChecked =
+                    true,
+
+                VerticalAlignment =
+                    VerticalAlignment.Center,
+
+                Foreground =
+                    Brushes.White
+            };
+
+        _firstMapNameTextBox =
+            new TextBox
+            {
+                Text =
+                    "map01",
+
+                Margin =
+                    new Thickness(
+                        16,
+                        0,
+                        0,
+                        0),
+
+                Padding =
+                    new Thickness(
+                        9,
+                        7,
+                        9,
+                        7),
+
+                Width =
+                    190,
+
+                FontSize =
+                    14
+            };
+
+        _createFirstMapCheckBox.Checked +=
+            (_, _) =>
+            {
+                _firstMapNameTextBox.IsEnabled =
+                    true;
+            };
+
+        _createFirstMapCheckBox.Unchecked +=
+            (_, _) =>
+            {
+                _firstMapNameTextBox.IsEnabled =
+                    false;
+            };
+
+        firstMapControls.Children.Add(
+            _createFirstMapCheckBox);
+
+        firstMapControls.Children.Add(
+            _firstMapNameTextBox);
+
+        firstMapPanel.Children.Add(
+            firstMapControls);
+
+        firstMapPanel.Children.Add(
+            new TextBlock
+            {
+                Margin =
+                    new Thickness(
+                        0,
+                        5,
+                        0,
+                        0),
+
+                Text =
+                    "The first map becomes the project's current map.",
+
+                Foreground =
+                    new SolidColorBrush(
+                        Color.FromRgb(
+                            135,
+                            145,
+                            157))
+            });
+
+        Grid.SetRow(
+            firstMapPanel,
+            4);
+
+        root.Children.Add(
+            firstMapPanel);
+
         StackPanel targetPanel =
             new()
             {
@@ -427,7 +577,7 @@ internal sealed class CompanionNewProjectDialog :
 
         Grid.SetRow(
             targetPanel,
-            4);
+            5);
 
         root.Children.Add(
             targetPanel);
@@ -496,7 +646,7 @@ internal sealed class CompanionNewProjectDialog :
 
         Grid.SetRow(
             buttons,
-            5);
+            6);
 
         root.Children.Add(
             buttons);
@@ -522,6 +672,12 @@ internal sealed class CompanionNewProjectDialog :
     public string SelectedTextureArchiveFormat { get; private set; } =
         string.Empty;
 
+    public bool CreateFirstMap { get; private set; } =
+        true;
+
+    public string FirstMapName { get; private set; } =
+        "map01";
+
     private void PopulateDrives()
     {
         DriveInfo[] drives =
@@ -542,7 +698,10 @@ internal sealed class CompanionNewProjectDialog :
             Path.GetPathRoot(
                 AppContext.BaseDirectory);
 
-        ComboBoxItem? preferredItem =
+        ComboBoxItem? rememberedItem =
+            null;
+
+        ComboBoxItem? applicationItem =
             null;
 
         foreach (DriveInfo drive in drives)
@@ -565,19 +724,31 @@ internal sealed class CompanionNewProjectDialog :
                 item);
 
             if (!string.IsNullOrWhiteSpace(
+                    _preferredDriveRoot) &&
+                string.Equals(
+                    drive.RootDirectory.FullName,
+                    _preferredDriveRoot,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                rememberedItem =
+                    item;
+            }
+
+            if (!string.IsNullOrWhiteSpace(
                     applicationDrive) &&
                 string.Equals(
                     drive.RootDirectory.FullName,
                     applicationDrive,
                     StringComparison.OrdinalIgnoreCase))
             {
-                preferredItem =
+                applicationItem =
                     item;
             }
         }
 
         _driveComboBox.SelectedItem =
-            preferredItem ??
+            rememberedItem ??
+            applicationItem ??
             (
                 _driveComboBox.Items.Count > 0
                     ? _driveComboBox.Items[0]
@@ -785,6 +956,37 @@ internal sealed class CompanionNewProjectDialog :
             return;
         }
 
+        bool createFirstMap =
+            _createFirstMapCheckBox.IsChecked ==
+            true;
+
+        string firstMapName =
+            _firstMapNameTextBox.Text.Trim();
+
+        if (createFirstMap)
+        {
+            try
+            {
+                _ =
+                    CompanionProjectMapCreationService
+                        .BuildMapFileName(
+                            firstMapName);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(
+                    this,
+                    exception.Message,
+                    "First Map Name",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                _firstMapNameTextBox.Focus();
+                _firstMapNameTextBox.SelectAll();
+                return;
+            }
+        }
+
         ProjectName =
             projectName;
 
@@ -793,6 +995,12 @@ internal sealed class CompanionNewProjectDialog :
 
         SelectedTextureArchiveFormat =
             GetSelectedTextureArchiveFormat();
+
+        CreateFirstMap =
+            createFirstMap;
+
+        FirstMapName =
+            firstMapName;
 
         DialogResult =
             true;

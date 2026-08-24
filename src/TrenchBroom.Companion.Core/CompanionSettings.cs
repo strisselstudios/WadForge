@@ -6,5 +6,9 @@ public sealed class CompanionSettings
 
     public string? ManagedDataRootPath { get; set; }
 
+    public string? LastProjectGameId { get; set; }
+
+    public string? LastWorkspaceDriveRoot { get; set; }
+
     public List<string> RegisteredWadPaths { get; set; } = new();
 }

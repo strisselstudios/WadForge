@@ -49,6 +49,8 @@ public partial class MainWindow
 
     private bool _refreshingMapList;
 
+    private bool _projectGameSelectionHooked;
+
     protected override void OnContentRendered(
         EventArgs e)
     {
@@ -56,7 +58,55 @@ public partial class MainWindow
             e);
 
         EnsureProjectControls();
+        ApplyRememberedProjectPreferences();
         RefreshProjectInterface();
+    }
+
+    private void ApplyRememberedProjectPreferences()
+    {
+        if (_projectGameSelectionHooked)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                _settings.LastProjectGameId))
+        {
+            SelectProjectGame(
+                _settings.LastProjectGameId);
+        }
+
+        ProjectGameComboBox.SelectionChanged +=
+            ProjectGameComboBox_SelectionChanged;
+
+        _projectGameSelectionHooked =
+            true;
+    }
+
+    private void ProjectGameComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (_projectSession is not null)
+        {
+            return;
+        }
+
+        string gameId =
+            GetSelectedProjectGameId();
+
+        if (string.Equals(
+                _settings.LastProjectGameId,
+                gameId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _settings.LastProjectGameId =
+            gameId;
+
+        SaveSettings();
     }
 
     private void EnsureProjectControls()
@@ -112,7 +162,8 @@ public partial class MainWindow
 
         CompanionNewProjectDialog dialog =
             new(
-                gameProfile)
+                gameProfile,
+                _settings.LastWorkspaceDriveRoot)
             {
                 Owner =
                     this
@@ -144,13 +195,34 @@ public partial class MainWindow
                     .ProvisionedProject
                     .GameInstallationDirectory;
 
+            _settings.LastProjectGameId =
+                gameProfile.Id;
+
+            _settings.LastWorkspaceDriveRoot =
+                dialog.SelectedDriveRoot;
+
+            SaveSettings();
+
             SelectProjectGame(
                 gameProfile.Id);
+
+            string? createdMap =
+                null;
+
+            if (dialog.CreateFirstMap)
+            {
+                createdMap =
+                    _mapCreationService.CreateMap(
+                        _projectSession,
+                        dialog.FirstMapName);
+            }
 
             RefreshProjectInterface();
 
             StatusText.Text =
-                $"Created project '{_projectSession.Project.Name}'.";
+                createdMap is null
+                    ? $"Created project '{_projectSession.Project.Name}'."
+                    : $"Created project '{_projectSession.Project.Name}' with map '{Path.GetFileName(createdMap)}'.";
         }
         catch (Exception exception)
         {
@@ -165,28 +237,18 @@ public partial class MainWindow
     {
         EnsureProjectControls();
 
-        OpenFileDialog dialog =
+        OpenFolderDialog dialog =
             new()
             {
                 Title =
-                    "Open TrenchBroom Companion Project",
-
-                Filter =
-                    "TrenchBroom Companion projects|*.tbproject|" +
-                    "All files|*.*",
+                    "Select TrenchBroom Companion Project Folder",
 
                 InitialDirectory =
                     GetDefaultProjectsRoot() ??
                     string.Empty,
 
                 Multiselect =
-                    false,
-
-                CheckFileExists =
-                    true,
-
-                CheckPathExists =
-                    true
+                    false
             };
 
         if (dialog.ShowDialog(this) != true)
@@ -196,9 +258,49 @@ public partial class MainWindow
 
         try
         {
+            string selectedProjectDirectory =
+                Path.GetFullPath(
+                    dialog.FolderName);
+
+            string[] projectFiles =
+                Directory.GetFiles(
+                    selectedProjectDirectory,
+                    "*.tbproject",
+                    SearchOption.TopDirectoryOnly);
+
+            if (projectFiles.Length == 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "That folder is not a TrenchBroom Companion project." +
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    "Select a project folder that contains its .tbproject file.",
+                    "Project Not Found",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            if (projectFiles.Length > 1)
+            {
+                MessageBox.Show(
+                    this,
+                    "That folder contains more than one .tbproject file, so Companion cannot determine which project to open." +
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    "A Companion project folder must contain exactly one .tbproject file.",
+                    "Ambiguous Project Folder",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
             _projectSession =
                 _projectManager.Open(
-                    dialog.FileName);
+                    projectFiles[0]);
 
             EnsureManagedDataRootForProject(
                 _projectSession.ProjectDirectory);
@@ -233,7 +335,6 @@ public partial class MainWindow
                 exception.Message);
         }
     }
-
     private void CloseProject_Click(
         object sender,
         RoutedEventArgs e)
