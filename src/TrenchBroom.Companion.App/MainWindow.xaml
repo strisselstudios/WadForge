@@ -82,6 +82,33 @@
                        TextTrimming="CharacterEllipsis"
                        ToolTip="{Binding DisplayName}" />
         </DataTemplate>
+        <DataTemplate x:Key="RecentProjectChoiceTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{Binding DisplayName}"
+                               FontWeight="SemiBold"
+                               Foreground="#F4F7FB"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Margin="0,3,20,0"
+                               Text="{Binding DirectoryPath}"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               FontSize="11"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding DirectoryPath}" />
+                </StackPanel>
+                <TextBlock Grid.Column="1"
+                           Margin="20,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource AccentBrush}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Text="{Binding GameDisplayName}" />
+            </Grid>
+        </DataTemplate>
 
         <Style x:Key="DarkContextMenuStyle"
                TargetType="ContextMenu">
@@ -579,6 +606,53 @@
                         </Grid>
                     </Border>
 
+                    <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource AccentBrush}"
+                                               FontSize="11"
+                                               FontWeight="Bold"
+                                               Text="RECENT PROJECTS" />
+                                    <TextBlock Margin="0,5,0,0"
+                                               FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Text="Continue a project" />
+                                    <TextBlock Margin="0,5,40,0"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                               FontSize="12"
+                                               Text="Recently created or opened Companion projects." />
+                                </StackPanel>
+                                <Button x:Name="OpenRecentProjectButton"
+                                        Grid.Column="1"
+                                        MinWidth="92"
+                                        Margin="16,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource DarkButtonStyle}"
+                                        IsEnabled="False"
+                                        Click="OpenRecentProject_Click"
+                                        Content="Open" />
+                            </Grid>
+                            <TextBlock x:Name="RecentProjectsEmptyText"
+                                       Margin="0,16,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="12"
+                                       Text="Projects you create or open will appear here." />
+                            <ListBox x:Name="RecentProjectsListBox"
+                                     Margin="0,12,0,0"
+                                     MaxHeight="220"
+                                     Visibility="Collapsed"
+                                     Style="{StaticResource ProjectMapListStyle}"
+                                     ItemContainerStyle="{StaticResource ProjectMapListItemStyle}"
+                                     ItemTemplate="{StaticResource RecentProjectChoiceTemplate}"
+                                     SelectionChanged="RecentProjectsListBox_SelectionChanged"
+                                     MouseDoubleClick="RecentProjectsListBox_MouseDoubleClick" />
+                        </StackPanel>
+                    </Border>
                     <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>

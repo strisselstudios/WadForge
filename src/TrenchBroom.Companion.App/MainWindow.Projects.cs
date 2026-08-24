@@ -51,6 +51,8 @@ public partial class MainWindow
 
     private bool _projectGameSelectionHooked;
 
+    private const int RecentProjectLimit = 5;
+
     protected override void OnContentRendered(
         EventArgs e)
     {
@@ -217,6 +219,9 @@ public partial class MainWindow
                         dialog.FirstMapName);
             }
 
+            RegisterRecentProject(
+                _projectSession.ProjectDirectory);
+
             RefreshProjectInterface();
 
             StatusText.Text =
@@ -258,68 +263,11 @@ public partial class MainWindow
 
         try
         {
-            string selectedProjectDirectory =
-                Path.GetFullPath(
-                    dialog.FolderName);
-
-            string[] projectFiles =
-                Directory.GetFiles(
-                    selectedProjectDirectory,
-                    "*.tbproject",
-                    SearchOption.TopDirectoryOnly);
-
-            if (projectFiles.Length == 0)
-            {
-                MessageBox.Show(
-                    this,
-                    "That folder is not a TrenchBroom Companion project." +
-                    Environment.NewLine +
-                    Environment.NewLine +
-                    "Select a project folder that contains its .tbproject file.",
-                    "Project Not Found",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-
-                return;
-            }
-
-            if (projectFiles.Length > 1)
-            {
-                MessageBox.Show(
-                    this,
-                    "That folder contains more than one .tbproject file, so Companion cannot determine which project to open." +
-                    Environment.NewLine +
-                    Environment.NewLine +
-                    "A Companion project folder must contain exactly one .tbproject file.",
-                    "Ambiguous Project Folder",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-
-                return;
-            }
-
-            _projectSession =
-                _projectManager.Open(
-                    projectFiles[0]);
-
-            EnsureManagedDataRootForProject(
-                _projectSession.ProjectDirectory);
-
-            SelectProjectGame(
-                _projectSession.Project.GameId);
-
-            CompanionGameProfile gameProfile =
-                CompanionGameProfiles.GetRequired(
-                    _projectSession.Project.GameId);
-
-            _gameInstallationDirectory =
-                ResolveProjectGameInstallation(
-                    gameProfile);
-
-            RefreshProjectInterface();
+            OpenProjectDirectory(
+                dialog.FolderName);
 
             StatusText.Text =
-                $"Opened project '{_projectSession.Project.Name}'.";
+                $"Opened project '{_projectSession!.Project.Name}'.";
         }
         catch (Exception exception)
         {
@@ -330,11 +278,355 @@ public partial class MainWindow
                 null;
 
             RefreshProjectInterface();
+            ShowProjectError(
+                exception.Message);
+        }
+    }
+
+    private void OpenRecentProject_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (RecentProjectsListBox.SelectedItem is not
+                RecentProjectChoice recentProject)
+        {
+            return;
+        }
+
+        try
+        {
+            OpenProjectDirectory(
+                recentProject.DirectoryPath);
+
+            ShowShellSection(
+                ProjectSection);
+
+            RefreshShellContext();
+
+            StatusText.Text =
+                $"Opened project '{_projectSession!.Project.Name}'.";
+        }
+        catch (Exception exception)
+        {
+            _projectSession =
+                null;
+
+            _gameInstallationDirectory =
+                null;
+
+            RefreshProjectInterface();
+            RefreshShellContext();
 
             ShowProjectError(
                 exception.Message);
         }
     }
+
+    private void RecentProjectsListBox_MouseDoubleClick(
+        object sender,
+        System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (RecentProjectsListBox.SelectedItem is null)
+        {
+            return;
+        }
+
+        OpenRecentProject_Click(
+            sender,
+            e);
+    }
+
+    private void RecentProjectsListBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        OpenRecentProjectButton.IsEnabled =
+            RecentProjectsListBox.SelectedItem is
+                RecentProjectChoice;
+    }
+
+    private void OpenProjectDirectory(
+        string projectDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(
+                projectDirectory))
+        {
+            throw new ArgumentException(
+                "Project folder cannot be empty.",
+                nameof(projectDirectory));
+        }
+
+        string selectedProjectDirectory =
+            Path.GetFullPath(
+                projectDirectory);
+
+        if (!Directory.Exists(
+                selectedProjectDirectory))
+        {
+            throw new DirectoryNotFoundException(
+                $"Project folder was not found: '{selectedProjectDirectory}'.");
+        }
+
+        string[] projectFiles =
+            Directory.GetFiles(
+                selectedProjectDirectory,
+                "*.tbproject",
+                SearchOption.TopDirectoryOnly);
+
+        if (projectFiles.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "That folder is not a TrenchBroom Companion project. " +
+                "Select a project folder that contains its .tbproject file.");
+        }
+
+        if (projectFiles.Length > 1)
+        {
+            throw new InvalidOperationException(
+                "That folder contains more than one .tbproject file. " +
+                "A Companion project folder must contain exactly one .tbproject file.");
+        }
+
+        _projectSession =
+            _projectManager.Open(
+                projectFiles[0]);
+
+        EnsureManagedDataRootForProject(
+            _projectSession.ProjectDirectory);
+
+        SelectProjectGame(
+            _projectSession.Project.GameId);
+
+        CompanionGameProfile gameProfile =
+            CompanionGameProfiles.GetRequired(
+                _projectSession.Project.GameId);
+
+        _gameInstallationDirectory =
+            ResolveProjectGameInstallation(
+                gameProfile);
+
+        RegisterRecentProject(
+            _projectSession.ProjectDirectory);
+
+        RefreshProjectInterface();
+    }
+
+    private void RegisterRecentProject(
+        string projectDirectory)
+    {
+        string fullProjectDirectory =
+            Path.GetFullPath(
+                projectDirectory);
+
+        List<string> updated =
+            new()
+            {
+                fullProjectDirectory
+            };
+
+        foreach (string recentPath in
+                 _settings.RecentProjectDirectories)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    recentPath))
+            {
+                continue;
+            }
+
+            string fullRecentPath;
+
+            try
+            {
+                fullRecentPath =
+                    Path.GetFullPath(
+                        recentPath);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (updated.Any(
+                    existing =>
+                        string.Equals(
+                            existing,
+                            fullRecentPath,
+                            StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            updated.Add(
+                fullRecentPath);
+
+            if (updated.Count >=
+                RecentProjectLimit)
+            {
+                break;
+            }
+        }
+
+        _settings.RecentProjectDirectories =
+            updated;
+
+        SaveSettings();
+    }
+
+    private void RefreshRecentProjects()
+    {
+        RecentProjectsListBox.Items.Clear();
+
+        OpenRecentProjectButton.IsEnabled =
+            false;
+
+        List<string> validDirectories =
+            new();
+
+        foreach (string projectDirectory in
+                 _settings.RecentProjectDirectories)
+        {
+            if (validDirectories.Count >=
+                RecentProjectLimit)
+            {
+                break;
+            }
+
+            if (!TryCreateRecentProjectChoice(
+                    projectDirectory,
+                    out RecentProjectChoice? choice) ||
+                choice is null)
+            {
+                continue;
+            }
+
+            if (validDirectories.Any(
+                    existing =>
+                        string.Equals(
+                            existing,
+                            choice.DirectoryPath,
+                            StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            validDirectories.Add(
+                choice.DirectoryPath);
+
+            RecentProjectsListBox.Items.Add(
+                choice);
+        }
+
+        bool settingsChanged =
+            _settings.RecentProjectDirectories.Count !=
+                validDirectories.Count ||
+            !_settings.RecentProjectDirectories.SequenceEqual(
+                validDirectories,
+                StringComparer.OrdinalIgnoreCase);
+
+        if (settingsChanged)
+        {
+            _settings.RecentProjectDirectories =
+                validDirectories;
+
+            SaveSettings();
+        }
+
+        bool hasRecentProjects =
+            RecentProjectsListBox.Items.Count > 0;
+
+        RecentProjectsEmptyText.Visibility =
+            hasRecentProjects
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+        RecentProjectsListBox.Visibility =
+            hasRecentProjects
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        if (hasRecentProjects)
+        {
+            RecentProjectsListBox.SelectedIndex =
+                0;
+
+            OpenRecentProjectButton.IsEnabled =
+                true;
+        }
+    }
+
+    private bool TryCreateRecentProjectChoice(
+        string projectDirectory,
+        out RecentProjectChoice? choice)
+    {
+        choice =
+            null;
+
+        if (string.IsNullOrWhiteSpace(
+                projectDirectory))
+        {
+            return false;
+        }
+
+        try
+        {
+            string fullProjectDirectory =
+                Path.GetFullPath(
+                    projectDirectory);
+
+            if (!Directory.Exists(
+                    fullProjectDirectory))
+            {
+                return false;
+            }
+
+            string[] projectFiles =
+                Directory.GetFiles(
+                    fullProjectDirectory,
+                    "*.tbproject",
+                    SearchOption.TopDirectoryOnly);
+
+            if (projectFiles.Length != 1)
+            {
+                return false;
+            }
+
+            CompanionProjectSession recentSession =
+                _projectManager.Open(
+                    projectFiles[0]);
+
+            CompanionProjectManifest project =
+                recentSession.Project;
+
+            string gameDisplayName;
+
+            if (CompanionGameProfiles.TryGet(
+                    project.GameId,
+                    out CompanionGameProfile? gameProfile) &&
+                gameProfile is not null)
+            {
+                gameDisplayName =
+                    gameProfile.DisplayName;
+            }
+            else
+            {
+                gameDisplayName =
+                    project.GameId;
+            }
+
+            choice =
+                new RecentProjectChoice(
+                    project.Name,
+                    gameDisplayName,
+                    fullProjectDirectory);
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private void CloseProject_Click(
         object sender,
         RoutedEventArgs e)
@@ -1676,6 +1968,7 @@ public partial class MainWindow
     private void RefreshProjectInterface()
     {
         EnsureProjectControls();
+        RefreshRecentProjects();
 
         if (_projectSession is null)
         {
@@ -1924,6 +2217,30 @@ public partial class MainWindow
             _refreshingMapList =
                 false;
         }
+    }
+
+    private sealed class RecentProjectChoice
+    {
+        public RecentProjectChoice(
+            string displayName,
+            string gameDisplayName,
+            string directoryPath)
+        {
+            DisplayName =
+                displayName;
+
+            GameDisplayName =
+                gameDisplayName;
+
+            DirectoryPath =
+                directoryPath;
+        }
+
+        public string DisplayName { get; }
+
+        public string GameDisplayName { get; }
+
+        public string DirectoryPath { get; }
     }
 
     private void ShowProjectError(

@@ -10,5 +10,7 @@ public sealed class CompanionSettings
 
     public string? LastWorkspaceDriveRoot { get; set; }
 
+    public List<string> RecentProjectDirectories { get; set; } = new();
+
     public List<string> RegisteredWadPaths { get; set; } = new();
 }
