@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -2140,8 +2140,26 @@ public partial class MainWindow
                 ProjectMapListBox.IsEnabled =
                     false;
 
-                EmptyProjectMapsText.Visibility =
+                ProjectMapListBox.Visibility =
+                    Visibility.Collapsed;
+
+                EmptyProjectMapsPanel.Visibility =
+                    Visibility.Collapsed;
+
+                EmptyCreateFirstMapButton.IsEnabled =
+                    false;
+
+                EmptyAddExistingMapButton.IsEnabled =
+                    false;
+
+                NewMapButton.Visibility =
                     Visibility.Visible;
+
+                ImportMapButton.Visibility =
+                    Visibility.Visible;
+
+                MapsHelpText.Text =
+                    "Choose a map to work on, or add another map to this project.";
 
                 return;
             }
@@ -2204,13 +2222,42 @@ public partial class MainWindow
                         : null
                 );
 
-            ProjectMapListBox.IsEnabled =
+            bool hasMaps =
                 ProjectMapListBox.Items.Count > 0;
 
-            EmptyProjectMapsText.Visibility =
-                ProjectMapListBox.Items.Count > 0
+            ProjectMapListBox.IsEnabled =
+                hasMaps;
+
+            ProjectMapListBox.Visibility =
+                hasMaps
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            EmptyProjectMapsPanel.Visibility =
+                hasMaps
                     ? Visibility.Collapsed
                     : Visibility.Visible;
+
+            EmptyCreateFirstMapButton.IsEnabled =
+                !hasMaps;
+
+            EmptyAddExistingMapButton.IsEnabled =
+                !hasMaps;
+
+            NewMapButton.Visibility =
+                hasMaps
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            ImportMapButton.Visibility =
+                hasMaps
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            MapsHelpText.Text =
+                hasMaps
+                    ? "Choose a map to work on, or add another map to this project."
+                    : "Start this project by creating a map or adding an existing .map file.";
         }
         finally
         {
@@ -2218,7 +2265,6 @@ public partial class MainWindow
                 false;
         }
     }
-
     private sealed class RecentProjectChoice
     {
         public RecentProjectChoice(

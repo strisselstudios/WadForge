@@ -718,7 +718,8 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock FontSize="18" FontWeight="SemiBold" Text="Maps" />
-                                    <TextBlock Margin="0,4,0,0"
+                                    <TextBlock x:Name="MapsHelpText"
+                                               Margin="0,4,0,0"
                                                Foreground="{StaticResource SecondaryTextBrush}"
                                                Text="Choose a map to work on, or add another map to this project." />
                                 </StackPanel>
@@ -808,15 +809,39 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
-                                    <TextBlock x:Name="EmptyProjectMapsText"
-                                               Margin="20"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource MutedTextBrush}"
-                                               Text="No maps yet. Create a new map or add an existing .map file."
-                                               TextAlignment="Center"
-                                               TextWrapping="Wrap"
-                                               IsHitTestVisible="False" />
+                                    <StackPanel x:Name="EmptyProjectMapsPanel"
+                                                Margin="20"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center">
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   Foreground="#FFFFFF"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   Text="No maps yet."
+                                                   TextAlignment="Center" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   MaxWidth="520"
+                                                   HorizontalAlignment="Center"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="12"
+                                                   Text="Create your first map or add an existing .map file to this project."
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap" />
+                                        <StackPanel Margin="0,14,0,0"
+                                                    HorizontalAlignment="Center"
+                                                    Orientation="Horizontal">
+                                            <Button x:Name="EmptyCreateFirstMapButton"
+                                                    Style="{StaticResource PrimaryButtonStyle}"
+                                                    Foreground="#FFFFFF"
+                                                    Click="NewMap_Click"
+                                                    Content="+ Create First Map" />
+                                            <Button x:Name="EmptyAddExistingMapButton"
+                                                    Style="{StaticResource DarkButtonStyle}"
+                                                    Foreground="#FFFFFF"
+                                                    Click="ImportMap_Click"
+                                                    Content="Add Existing" />
+                                        </StackPanel>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
 
