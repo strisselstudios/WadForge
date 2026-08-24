@@ -50,7 +50,7 @@ public static class CompanionCompilerOptionSchemaService
         }
 
         throw new NotSupportedException(
-            $"Companion does not yet have a Build Settings schema for game '{gameId}' and toolchain '{toolchainVersion}'.");
+            $"Companion does not yet have a Compile Settings schema for game '{gameId}' and toolchain '{toolchainVersion}'.");
     }
 
     private static IReadOnlyList<CompanionCompilerOptionDefinition> CreateOptions()
@@ -74,7 +74,7 @@ public static class CompanionCompilerOptionSchemaService
         o.Add(F("qbsp.oldleak", CompanionCompilerTool.Qbsp, "Leak diagnostics", "-oldleak", "Old-style leak points", "Creates an old-style .PTS leak file."));
         o.Add(F("qbsp.leaktest", CompanionCompilerTool.Qbsp, "Leak diagnostics", "-leaktest", "Fail build on leak", "Treat a detected leak as a compile error."));
         o.Add(F("qbsp.nopercent", CompanionCompilerTool.Qbsp, "Logging", "-nopercent", "Hide percent progress", "Suppress percent-completion output."));
-        o.Add(F("qbsp.bsp2", CompanionCompilerTool.Qbsp, "BSP format", "-bsp2", "BSP2", "Extended BSP2 format for maps that exceed standard BSP29 limits.", group:"qbsp.format"));
+        o.Add(F("qbsp.bsp2", CompanionCompilerTool.Qbsp, "BSP format", "-bsp2", "BSP2", "Extended BSP2 format for DUSK's Quake/WAD2 path. Companion ignores this automatically when WAD3 assets require Half-Life BSP mode.", group:"qbsp.format"));
         o.Add(F("qbsp.2psb", CompanionCompilerTool.Qbsp, "BSP format", "-2psb", "2PSB / RMQ BSP2", "Earlier RMQ/2PSB format. DUSK compatibility is not guaranteed.", group:"qbsp.format"));
         o.Add(I("qbsp.leakdist", CompanionCompilerTool.Qbsp, "Leak diagnostics", "-leakdist", "Leak point spacing", "Space between leak-file points. Documented default: 2.", "2", 1));
         o.Add(I("qbsp.subdivide", CompanionCompilerTool.Qbsp, "Geometry", "-subdivide", "Texture subdivision", "Texture subdivision size. Documented default: 240.", "240", 1));
@@ -108,7 +108,7 @@ public static class CompanionCompilerOptionSchemaService
         o.Add(N("light.gate", CompanionCompilerTool.Light, "Performance", "-gate", "Light gate", "Minimum brightness considered non-zero. Default: 0.001.", "0.001", 0));
         o.Add(I("light.sunsamples", CompanionCompilerTool.Light, "Sampling", "-sunsamples", "Sun samples", "Sample count for sunlight penumbra/sunlight2. Default: 100.", "100", 1));
         o.Add(I("light.surflight_subdivide", CompanionCompilerTool.Light, "Surface lights", "-surflight_subdivide", "Surface-light spacing", "Global surface-light spacing. Default 128, range 64–2048.", "128", 64, 2048));
-        o.Add(F("light.lit", CompanionCompilerTool.Light, "Output", "-lit", "Force colored .lit output", "Force a .lit file even if the map has no colored lights.", enabled:true));
+        o.Add(F("light.lit", CompanionCompilerTool.Light, "Output", "-lit", "Force colored .lit output", "Force a .lit file in DUSK's Quake/WAD2 path. Half-Life BSP stores RGB lighting in the BSP, so Companion ignores this automatically in WAD3 mode.", enabled:true));
         o.Add(F("light.onlyents", CompanionCompilerTool.Light, "Special-purpose", "-onlyents", "Entities-only light update", "Assign switchable-light styles after QBSP -onlyents.", available:false, note:"Depends on the separate QBSP -onlyents workflow, which Companion does not run during a normal fresh build."));
         o.Add(I("light.soft", CompanionCompilerTool.Light, "Postprocessing", "-soft", "Lightmap smoothing", "Average neighboring lightmap samples. 1 = 3x3, 2 = 5x5, etc.", "1", 1));
         o.Add(F("light.dirtdebug", CompanionCompilerTool.Light, "Debug", "-dirtdebug", "AO / dirt debug", "Render dirt/AO against a fullbright background for tuning."));

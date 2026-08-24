@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -1420,9 +1420,42 @@ public partial class MainWindow
                 return false;
             }
 
-            _projectWadService.SynchronizeMapWorldspawnWads(
-                _projectSession,
-                activeMapPath);
+            CompanionDuskAuthoringResourceStatus authoringStatus =
+                CompanionDuskAuthoringResourceService.GetStatus(
+                    _installation.ExecutablePath);
+
+            if (!authoringStatus.IsReady)
+            {
+                throw new InvalidOperationException(
+                    authoringStatus.Problem ??
+                    "The managed DUSK authoring resources are not ready.");
+            }
+
+            string duskPalettePath =
+                Path.Combine(
+                    authoringStatus.ManagedId1Directory,
+                    "gfx",
+                    "palette.lmp");
+
+            CompanionImportedMapAssetNormalizationResult assetNormalization =
+                CompanionImportedMapAssetService.NormalizeForDusk(
+                    _projectSession,
+                    activeMapPath,
+                    _projectWadService,
+                    _settings.RegisteredWadPaths,
+                    duskPalettePath);
+
+            if (assetNormalization.NormalizationChanged &&
+                assetNormalization.HasWarnings)
+            {
+                MessageBox.Show(
+                    this,
+                    BuildImportedMapAssetWarning(
+                        assetNormalization),
+                    "Imported Map Asset Check",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
 
             PrepareDuskCompilerProfile();
         }
@@ -1432,6 +1465,57 @@ public partial class MainWindow
             gameId);
 
         return true;
+    }
+
+    private static string BuildImportedMapAssetWarning(
+        CompanionImportedMapAssetNormalizationResult result)
+    {
+        List<string> lines =
+            new();
+
+        if (result.ImportedWadCount > 0)
+        {
+            lines.Add(
+                $"{result.ImportedWadCount:N0} referenced WAD(s) were copied into this project.");
+        }
+
+        if (result.MissingWadReferences.Count > 0)
+        {
+            lines.Add(
+                $"{result.MissingWadReferences.Count:N0} referenced WAD(s) could not be resolved.");
+        }
+
+        if (result.InvalidWadReferences.Count > 0)
+        {
+            lines.Add(
+                $"{result.InvalidWadReferences.Count:N0} referenced WAD(s) were invalid or conflicted with a project WAD.");
+        }
+
+        if (result.MissingTextureNames.Count > 0)
+        {
+            lines.Add(
+                $"{result.MissingTextureNames.Count:N0} used texture(s) are still missing.");
+        }
+
+        if (result.DuplicateTextureProviders.Count > 0)
+        {
+            lines.Add(
+                $"{result.DuplicateTextureProviders.Count:N0} used texture(s) exist in more than one managed WAD.");
+        }
+
+
+        lines.Add(
+            string.Empty);
+
+        lines.Add(
+            "Companion will still open the map. A detailed asset report was written to:");
+
+        lines.Add(
+            result.ReportPath);
+
+        return string.Join(
+            Environment.NewLine,
+            lines);
     }
 
     private bool EnsureDuskAuthoringResources()
@@ -1518,7 +1602,7 @@ public partial class MainWindow
             CompanionManagedDataRootService.GetRequiredRoot(
                 _settings);
 
-        CompanionEricwToolchainStatus toolchain =
+        CompanionEricwToolchainStatus stableToolchain =
             CompanionEricwToolchainService.EnsureProvisioned(
                 AppContext.BaseDirectory,
                 managedDataRoot);
@@ -1542,14 +1626,86 @@ public partial class MainWindow
             CompanionBuildSettingsService.Load(
                 _projectSession.ProjectDirectory,
                 CompanionGameProfiles.Dusk.Id,
-                toolchain.Version);
+                stableToolchain.Version);
+
+        string projectWadDirectory =
+            Path.Combine(
+                _projectSession.ProjectDirectory,
+                CompanionProjectLayout.WadsDirectoryName);
+
+        string? activeMapPath =
+            _projectSession.GetActiveMapFullPath();
+
+        CompanionDuskCompileModeDecision modeDecision =
+            !string.IsNullOrWhiteSpace(
+                activeMapPath) &&
+            File.Exists(
+                activeMapPath)
+                ? CompanionDuskCompileModeService.Determine(
+                    activeMapPath,
+                    projectWadDirectory)
+                : new CompanionDuskCompileModeDecision(
+                    CompanionDuskCompileMode.QuakeBsp,
+                    Array.Empty<string>());
+
+        CompanionDuskCompilationProfileContext compileContext =
+            CompanionDuskCompilationProfileContext.CreateQuake();
+
+        CompanionEricwToolchainStatus? halfLifeToolchain =
+            null;
+
+        if (modeDecision.UsesHalfLifeBsp)
+        {
+            CompanionDuskAuthoringResourceStatus authoringStatus =
+                CompanionDuskAuthoringResourceService.GetStatus(
+                    _installation.ExecutablePath);
+
+            if (!authoringStatus.IsReady)
+            {
+                throw new InvalidOperationException(
+                    authoringStatus.Problem ??
+                    "The managed DUSK authoring resources are not ready.");
+            }
+
+            string duskPalettePath =
+                Path.Combine(
+                    authoringStatus.ManagedId1Directory,
+                    "gfx",
+                    "palette.lmp");
+
+            string companionExecutablePath =
+                Path.Combine(
+                    AppContext.BaseDirectory,
+                    "TrenchBroom-Companion.exe");
+
+            if (!File.Exists(
+                    companionExecutablePath))
+            {
+                throw new FileNotFoundException(
+                    "Companion could not locate its compile preparation executable.",
+                    companionExecutablePath);
+            }
+
+            halfLifeToolchain =
+                CompanionDuskHlbspToolchainService.EnsureProvisioned(
+                    AppContext.BaseDirectory,
+                    managedDataRoot);
+
+            compileContext =
+                new CompanionDuskCompilationProfileContext(
+                    CompanionDuskCompileMode.HalfLifeBsp,
+                    halfLifeToolchain,
+                    companionExecutablePath,
+                    duskPalettePath);
+        }
 
         CompanionTrenchBroomCompilationProfileResult result =
             CompanionTrenchBroomCompilationProfileService.EnsureDuskProfile(
                 _installation.ExecutablePath,
-                toolchain,
+                stableToolchain,
                 runtimeModDirectory,
-                buildSettings);
+                buildSettings,
+                compileContext);
 
         if (string.IsNullOrWhiteSpace(
                 _gameInstallationDirectory))
@@ -1563,8 +1719,13 @@ public partial class MainWindow
                 _installation.ExecutablePath,
                 _gameInstallationDirectory);
 
+        string compileModeText =
+            modeDecision.UsesHalfLifeBsp
+                ? $"WAD3/Half-Life BSP mode with ericw-tools {halfLifeToolchain!.Version}"
+                : $"Quake BSP mode with ericw-tools {stableToolchain.Version}";
+
         StatusText.Text =
-            $"DUSK tooling ready — ericw-tools {toolchain.Version}, compile profile '{result.ProfileName}', and launch profile '{engineProfile.ProfileName}' are configured.";
+            $"DUSK tooling ready - {compileModeText}, compile profile '{result.ProfileName}', and launch profile '{engineProfile.ProfileName}' are configured.";
     }
 
     private void ProjectMapListBox_SelectionChanged(

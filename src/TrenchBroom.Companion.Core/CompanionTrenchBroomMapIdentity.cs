@@ -94,66 +94,436 @@ public static class CompanionTrenchBroomMapIdentityService
             GetRequired(
                 gameId);
 
-        MapHeaderState state =
-            ReadHeaderState(
+        byte[] originalBytes =
+            File.ReadAllBytes(
                 fullMapPath);
 
-        ValidateExistingHeader(
-            state.GameName,
-            identity.GameName,
-            "Game",
-            fullMapPath);
+        bool changed =
+            false;
 
-        ValidateExistingHeader(
-            state.MapFormat,
-            identity.MapFormat,
-            "Format",
-            fullMapPath);
+        try
+        {
+            MapHeaderState state =
+                ReadHeaderState(
+                    fullMapPath);
 
-        bool needsGame =
-            state.GameName is null;
+            if (string.Equals(
+                    identity.MapFormat,
+                    "Valve",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (state.MapFormat is not null &&
+                    !string.Equals(
+                        state.MapFormat,
+                        "Valve",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(
+                        state.MapFormat,
+                        "Standard",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException(
+                        $"Map '{Path.GetFileName(fullMapPath)}' declares // Format: {state.MapFormat}. " +
+                        "Companion only auto-converts Standard map syntax to Valve 220.");
+                }
 
-        bool needsFormat =
-            state.MapFormat is null;
+                if (CompanionMapFormatConversionService.EnsureValve220(
+                        fullMapPath))
+                {
+                    changed =
+                        true;
+                }
+            }
+            else
+            {
+                ValidateExistingHeader(
+                    state.MapFormat,
+                    identity.MapFormat,
+                    "Format",
+                    fullMapPath);
+            }
 
-        if (!needsGame &&
-            !needsFormat)
+            bool needsGame =
+                state.GameName is null;
+
+            bool retargetGame =
+                state.GameName is not null &&
+                !string.Equals(
+                    state.GameName,
+                    identity.GameName,
+                    StringComparison.OrdinalIgnoreCase);
+
+            bool needsFormat =
+                state.MapFormat is null;
+
+            bool retargetFormat =
+                state.MapFormat is not null &&
+                !string.Equals(
+                    state.MapFormat,
+                    identity.MapFormat,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (retargetFormat)
+            {
+                RewriteExistingAsciiHeader(
+                    fullMapPath,
+                    FormatHeaderPrefix,
+                    identity.MapFormat);
+
+                changed =
+                    true;
+            }
+
+            if (retargetGame)
+            {
+                RewriteExistingAsciiHeader(
+                    fullMapPath,
+                    GameHeaderPrefix,
+                    identity.GameName);
+
+                changed =
+                    true;
+            }
+
+            StringBuilder header =
+                new();
+
+            if (needsGame)
+            {
+                header.Append(
+                    GameHeaderPrefix);
+
+                header.Append(' ');
+
+                header.Append(
+                    identity.GameName);
+
+                header.Append("\r\n");
+            }
+
+            if (needsFormat)
+            {
+                header.Append(
+                    FormatHeaderPrefix);
+
+                header.Append(' ');
+
+                header.Append(
+                    identity.MapFormat);
+
+                header.Append("\r\n");
+            }
+
+            if (header.Length > 0)
+            {
+                PrependAsciiHeader(
+                    fullMapPath,
+                    header.ToString());
+
+                changed =
+                    true;
+            }
+
+            return changed;
+        }
+        catch
+        {
+            if (changed)
+            {
+                WriteIdentityBytesAtomically(
+                    fullMapPath,
+                    originalBytes);
+            }
+
+            throw;
+        }
+    }
+
+    private static void RewriteExistingAsciiHeader(
+        string mapPath,
+        string headerPrefix,
+        string value)
+    {
+        byte[] sourceBytes =
+            File.ReadAllBytes(
+                mapPath);
+
+        byte[] prefixBytes =
+            Encoding.ASCII.GetBytes(
+                headerPrefix);
+
+        byte[] replacementBytes =
+            Encoding.ASCII.GetBytes(
+                $"{headerPrefix} {value}");
+
+        int scanOffset =
+            HasUtf8Bom(
+                sourceBytes)
+                ? 3
+                : 0;
+
+        int copyOffset =
+            0;
+
+        bool changed =
+            false;
+
+        using MemoryStream output =
+            new(
+                sourceBytes.Length +
+                replacementBytes.Length +
+                32);
+
+        for (int lineIndex = 0;
+             lineIndex < 64 &&
+             scanOffset < sourceBytes.Length;
+             lineIndex++)
+        {
+            int lineStart =
+                scanOffset;
+
+            int lineContentEnd =
+                lineStart;
+
+            while (lineContentEnd <
+                       sourceBytes.Length &&
+                   sourceBytes[lineContentEnd] !=
+                       (byte)'\r' &&
+                   sourceBytes[lineContentEnd] !=
+                       (byte)'\n')
+            {
+                lineContentEnd++;
+            }
+
+            int contentStart =
+                SkipHeaderLinePrefix(
+                    sourceBytes,
+                    lineStart,
+                    lineContentEnd);
+
+            if (contentStart <
+                    lineContentEnd &&
+                sourceBytes[contentStart] ==
+                    (byte)'{')
+            {
+                break;
+            }
+
+            if (AsciiStartsWithIgnoreCase(
+                    sourceBytes,
+                    contentStart,
+                    lineContentEnd,
+                    prefixBytes))
+            {
+                output.Write(
+                    sourceBytes,
+                    copyOffset,
+                    lineStart -
+                    copyOffset);
+
+                output.Write(
+                    sourceBytes,
+                    lineStart,
+                    contentStart -
+                    lineStart);
+
+                output.Write(
+                    replacementBytes,
+                    0,
+                    replacementBytes.Length);
+
+                copyOffset =
+                    lineContentEnd;
+
+                changed =
+                    true;
+            }
+
+            int nextLine =
+                lineContentEnd;
+
+            if (nextLine <
+                    sourceBytes.Length &&
+                sourceBytes[nextLine] ==
+                    (byte)'\r')
+            {
+                nextLine++;
+            }
+
+            if (nextLine <
+                    sourceBytes.Length &&
+                sourceBytes[nextLine] ==
+                    (byte)'\n')
+            {
+                nextLine++;
+            }
+
+            scanOffset =
+                nextLine;
+        }
+
+        if (!changed)
+        {
+            throw new InvalidDataException(
+                $"Map '{Path.GetFileName(mapPath)}' declared an existing {headerPrefix} value, " +
+                "but Companion could not safely locate that header for retargeting.");
+        }
+
+        output.Write(
+            sourceBytes,
+            copyOffset,
+            sourceBytes.Length -
+            copyOffset);
+
+        WriteIdentityBytesAtomically(
+            mapPath,
+            output.ToArray());
+    }
+
+    private static int SkipHeaderLinePrefix(
+        byte[] sourceBytes,
+        int lineStart,
+        int lineEnd)
+    {
+        int offset =
+            lineStart;
+
+        while (offset <
+                   lineEnd &&
+               sourceBytes[offset] is
+                   (byte)' ' or
+                   (byte)'\t')
+        {
+            offset++;
+        }
+
+        if (offset + 2 <
+                lineEnd &&
+            sourceBytes[offset] ==
+                0xEF &&
+            sourceBytes[offset + 1] ==
+                0xBB &&
+            sourceBytes[offset + 2] ==
+                0xBF)
+        {
+            offset +=
+                3;
+
+            while (offset <
+                       lineEnd &&
+                   sourceBytes[offset] is
+                       (byte)' ' or
+                       (byte)'\t')
+            {
+                offset++;
+            }
+        }
+
+        return offset;
+    }
+
+    private static bool AsciiStartsWithIgnoreCase(
+        byte[] sourceBytes,
+        int contentStart,
+        int contentEnd,
+        byte[] prefixBytes)
+    {
+        if (contentEnd -
+                contentStart <
+            prefixBytes.Length)
         {
             return false;
         }
 
-        StringBuilder header =
-            new();
-
-        if (needsGame)
+        for (int index = 0;
+             index < prefixBytes.Length;
+             index++)
         {
-            header.Append(
-                GameHeaderPrefix);
-
-            header.Append(' ');
-            header.Append(
-                identity.GameName);
-
-            header.Append("\r\n");
+            if (ToAsciiLower(
+                    sourceBytes[
+                        contentStart +
+                        index]) !=
+                ToAsciiLower(
+                    prefixBytes[index]))
+            {
+                return false;
+            }
         }
-
-        if (needsFormat)
-        {
-            header.Append(
-                FormatHeaderPrefix);
-
-            header.Append(' ');
-            header.Append(
-                identity.MapFormat);
-
-            header.Append("\r\n");
-        }
-
-        PrependAsciiHeader(
-            fullMapPath,
-            header.ToString());
 
         return true;
+    }
+
+    private static byte ToAsciiLower(
+        byte value)
+    {
+        return value is >=
+                   (byte)'A' and <=
+                   (byte)'Z'
+            ? (byte)(
+                value +
+                ((byte)'a' -
+                 (byte)'A'))
+            : value;
+    }
+
+    private static bool HasUtf8Bom(
+        byte[] sourceBytes)
+    {
+        return
+            sourceBytes.Length >= 3 &&
+            sourceBytes[0] == 0xEF &&
+            sourceBytes[1] == 0xBB &&
+            sourceBytes[2] == 0xBF;
+    }
+
+    private static void WriteIdentityBytesAtomically(
+        string mapPath,
+        byte[] bytes)
+    {
+        string temporaryPath =
+            mapPath +
+            ".tbcompanion-retarget-" +
+            Guid.NewGuid().ToString("N");
+
+        try
+        {
+            using (FileStream output =
+                   new(
+                       temporaryPath,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None))
+            {
+                output.Write(
+                    bytes,
+                    0,
+                    bytes.Length);
+
+                output.Flush(
+                    flushToDisk: true);
+            }
+
+            File.Move(
+                temporaryPath,
+                mapPath,
+                overwrite: true);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(
+                        temporaryPath))
+                {
+                    File.Delete(
+                        temporaryPath);
+                }
+            }
+            catch
+            {
+                // Preserve the original retargeting result.
+            }
+        }
     }
 
     private static MapHeaderState ReadHeaderState(
