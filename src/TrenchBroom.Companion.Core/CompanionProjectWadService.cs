@@ -214,6 +214,58 @@ public sealed class CompanionProjectWadService
             .ToArray();
     }
 
+    public IReadOnlyList<string> GetMapWadReferences(
+        string mapPath)
+    {
+        if (string.IsNullOrWhiteSpace(
+                mapPath))
+        {
+            throw new ArgumentException(
+                "A map path is required.",
+                nameof(mapPath));
+        }
+
+        string fullMapPath =
+            Path.GetFullPath(
+                mapPath);
+
+        if (!File.Exists(
+                fullMapPath))
+        {
+            throw new FileNotFoundException(
+                "The map could not be found.",
+                fullMapPath);
+        }
+
+        MapTextFile mapFile =
+            ReadMapTextFile(
+                fullMapPath);
+
+        string? wadProperty =
+            GetWorldspawnProperty(
+                mapFile.Text,
+                "wad");
+
+        if (string.IsNullOrWhiteSpace(
+                wadProperty))
+        {
+            return Array.Empty<string>();
+        }
+
+        return UnescapeMapPropertyValue(
+                wadProperty)
+            .Split(
+                ';',
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries)
+            .Where(
+                value =>
+                    value.Length >
+                    0)
+            .Distinct(
+                StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
     public CompanionProjectWadReconciliationResult ReconcileReferencedMapWads(
         CompanionProjectSession session,
         string mapPath)
@@ -489,6 +541,101 @@ public sealed class CompanionProjectWadService
             validatedWads);
     }
 
+    public CompanionProjectWadSyncResult SynchronizeMapWorldspawnWads(
+        string mapPath,
+        IReadOnlyList<string> wadPaths)
+    {
+        if (string.IsNullOrWhiteSpace(
+                mapPath))
+        {
+            throw new ArgumentException(
+                "A map path is required.",
+                nameof(mapPath));
+        }
+
+        ArgumentNullException.ThrowIfNull(
+            wadPaths);
+
+        string fullMapPath =
+            Path.GetFullPath(
+                mapPath);
+
+        if (!File.Exists(
+                fullMapPath))
+        {
+            throw new FileNotFoundException(
+                "The map could not be found.",
+                fullMapPath);
+        }
+
+        List<string> validated =
+            new();
+
+        foreach (string wadPath in
+                 wadPaths)
+        {
+            string fullWadPath =
+                Path.GetFullPath(
+                    wadPath);
+
+            WadRegistrationResult inspection =
+                WadRegistrationService.Inspect(
+                    fullWadPath);
+
+            if (!inspection.WadIsValid)
+            {
+                throw new InvalidDataException(
+                    $"Selected WAD '{Path.GetFileName(fullWadPath)}' is invalid. " +
+                    inspection.Validation);
+            }
+
+            if (!validated.Contains(
+                    fullWadPath,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                validated.Add(
+                    fullWadPath);
+            }
+        }
+
+        string wadPropertyValue =
+            string.Join(
+                ";",
+                validated.Select(
+                    path =>
+                        path.Replace(
+                            '\\',
+                            '/')));
+
+        MapTextFile mapFile =
+            ReadMapTextFile(
+                fullMapPath);
+
+        string updatedText =
+            SetWorldspawnProperty(
+                mapFile.Text,
+                "wad",
+                wadPropertyValue);
+
+        bool changed =
+            !string.Equals(
+                updatedText,
+                mapFile.Text,
+                StringComparison.Ordinal);
+
+        if (changed)
+        {
+            WriteMapTextFileAtomically(
+                fullMapPath,
+                updatedText,
+                mapFile.Encoding);
+        }
+
+        return new CompanionProjectWadSyncResult(
+            validated.Count,
+            changed,
+            validated);
+    }
     private static string? GetWorldspawnProperty(
         string mapText,
         string propertyName)

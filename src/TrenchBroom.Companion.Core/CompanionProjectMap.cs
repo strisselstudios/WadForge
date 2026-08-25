@@ -5,4 +5,6 @@ public sealed class CompanionProjectMap
     public string Path { get; set; } = string.Empty;
 
     public string DisplayName { get; set; } = string.Empty;
+
+    public List<string> WadAssetIds { get; set; } = new();
 }

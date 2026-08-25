@@ -39,6 +39,10 @@ public partial class MainWindow
         _projectWadService =
             new();
 
+    private readonly CompanionProjectWadSelectionService
+        _projectWadSelectionService =
+            new();
+
     private readonly CompanionProjectLayout
         _projectLayout =
             new();
@@ -128,7 +132,21 @@ public partial class MainWindow
 
         CompileSettingsButton.ToolTip =
             "Configure compiler options for this project";
-    }
+
+        ManageAssetsButton.Content =
+            "Map WADs";
+
+        ManageAssetsButton.ToolTip =
+            "Choose WADs for the selected map";
+
+        ManageAssetsButton.Click -=
+            ShellNavigation_Click;
+
+        ManageAssetsButton.Click -=
+            ManageMapWads_Click;
+
+        ManageAssetsButton.Click +=
+            ManageMapWads_Click;}
 
     private void NewProject_Click(
         object sender,
@@ -218,6 +236,14 @@ public partial class MainWindow
                     _mapCreationService.CreateMap(
                         _projectSession,
                         dialog.FirstMapName);
+                _projectWadSelectionService.ApplyProjectDefaultsToMap(
+                    _projectSession,
+                    createdMap);
+
+                ShowMapWadSelectionDialog(
+                    createdMap,
+                    preferProjectDefault: true,
+                    showWhenEmpty: false);
             }
 
             TryPrepareCurrentProjectReadiness();
@@ -396,6 +422,9 @@ public partial class MainWindow
 
         EnsureManagedDataRootForProject(
             _projectSession.ProjectDirectory);
+        MigrateProjectWadSelections();
+
+        _projectSession.Save();
 
         SelectProjectGame(
             _projectSession.Project.GameId);
@@ -684,6 +713,16 @@ public partial class MainWindow
                 _mapCreationService.CreateMap(
                     _projectSession,
                     dialog.MapName);
+            _projectWadSelectionService.ApplyProjectDefaultsToMap(
+                _projectSession,
+                createdMap);
+
+            ShowMapWadSelectionDialog(
+                createdMap,
+                preferProjectDefault:
+                    _projectSession.Project.Maps.Count ==
+                    1,
+                showWhenEmpty: false);
 
             RefreshProjectInterface();
 
@@ -737,6 +776,7 @@ public partial class MainWindow
                 _mapImportService.ImportMaps(
                     _projectSession,
                     dialog.FileNames);
+            MigrateProjectWadSelections();
 
             RefreshProjectInterface();
 
@@ -752,6 +792,165 @@ public partial class MainWindow
         }
     }
 
+    private void ManageMapWads_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_projectSession is null)
+        {
+            return;
+        }
+
+        string? activeMapPath =
+            _projectSession.GetActiveMapFullPath();
+
+        if (string.IsNullOrWhiteSpace(
+                activeMapPath) ||
+            !File.Exists(
+                activeMapPath))
+        {
+            MessageBox.Show(
+                this,
+                "Select a map before choosing its WADs.",
+                "Map Required",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        try
+        {
+            ShowMapWadSelectionDialog(
+                activeMapPath,
+                preferProjectDefault: false,
+                showWhenEmpty: true);
+        }
+        catch (Exception exception)
+        {
+            ShowProjectError(
+                exception.Message);
+        }
+    }
+
+    private bool ShowMapWadSelectionDialog(
+        string mapPath,
+        bool preferProjectDefault,
+        bool showWhenEmpty)
+    {
+        if (_projectSession is null)
+        {
+            return false;
+        }
+
+        string managedDataRoot =
+            CompanionManagedDataRootService.GetRequiredRoot(
+                _settings);
+
+        CompanionProjectMap map =
+            _projectWadSelectionService.GetMap(
+                _projectSession,
+                mapPath);
+
+        IReadOnlyList<CompanionWadLibraryAsset> assets =
+            _projectWadSelectionService.GetSelectableAssets(
+                _projectSession.Project,
+                managedDataRoot,
+                _wadLibraryService,
+                map.WadAssetIds);
+
+        if (assets.Count ==
+                0 &&
+            !showWhenEmpty)
+        {
+            return false;
+        }
+
+        string formatDisplay =
+            string.IsNullOrWhiteSpace(
+                _projectSession.Project.PreferredTextureArchiveFormat)
+                ? CompanionTextureArchiveFormats.GetDisplayName(
+                    CompanionGameProfiles
+                        .GetRequired(
+                            _projectSession.Project.GameId)
+                        .DefaultTextureArchiveFormat)
+                : CompanionTextureArchiveFormats.GetDisplayName(
+                    _projectSession.Project.PreferredTextureArchiveFormat);
+
+        CompanionWadSelectionDialog dialog =
+            new(
+                map.DisplayName,
+                formatDisplay,
+                assets,
+                map.WadAssetIds,
+                preferProjectDefault)
+            {
+                Owner =
+                    this
+            };
+
+        if (dialog.ShowDialog() !=
+            true)
+        {
+            return false;
+        }
+
+        CompanionProjectWadSelectionResult result =
+            _projectWadSelectionService.SetMapSelection(
+                _projectSession,
+                mapPath,
+                dialog.SelectedAssetIds,
+                dialog.UseAsProjectDefault,
+                managedDataRoot,
+                _wadLibraryService,
+                _projectWadService);
+
+        RefreshProjectInterface();
+
+        StatusText.Text =
+            result.SelectedWadCount ==
+                1
+                ? $"1 library WAD selected for '{map.DisplayName}'."
+                : $"{result.SelectedWadCount:N0} library WADs selected for '{map.DisplayName}'.";
+
+        return true;
+    }
+
+    private void MigrateProjectWadSelections()
+    {
+        if (_projectSession is null)
+        {
+            return;
+        }
+
+        string managedDataRoot =
+            CompanionManagedDataRootService.GetRequiredRoot(
+                _settings);
+
+        CompanionProjectWadSelectionMigrationResult migration =
+            _projectWadSelectionService.MigrateLegacyProjectSelections(
+                _projectSession,
+                managedDataRoot,
+                _wadLibraryService,
+                _projectWadService);
+
+        if (migration.ImportedToLibraryCount >
+            0)
+        {
+            SynchronizeRegisteredWadsWithLibrary(
+                managedDataRoot,
+                adoptExternalWads: false);
+
+            SaveSettings();
+        }
+
+        if (migration.Issues.Count >
+            0)
+        {
+            StatusText.Text =
+                $"WAD selection migration completed with {migration.Issues.Count:N0} item(s) needing review.";
+        }
+    }
     private void ProjectUtilities_Click(
         object sender,
         RoutedEventArgs e)
@@ -817,6 +1016,20 @@ public partial class MainWindow
         openItem.Click +=
             OpenCurrentMap_Click;
 
+        MenuItem wadItem =
+            new()
+            {
+                Header =
+                    "Choose WADs",
+
+                Style =
+                    FindResource(
+                        "DarkMenuItemStyle")
+                    as Style
+            };
+
+        wadItem.Click +=
+            ManageMapWads_Click;
         MenuItem compileSettingsItem =
             new()
             {
@@ -883,6 +1096,9 @@ public partial class MainWindow
         menu.Items.Add(
             deleteItem);
 
+        menu.Items.Insert(
+            1,
+            wadItem);
         menu.PlacementTarget =
             button;
 
@@ -2833,30 +3049,25 @@ public partial class MainWindow
                 confirmedMapPath) ??
             "Map";
 
-        string wadDirectory =
-            Path.Combine(
-                _projectSession!.ProjectDirectory,
-                CompanionProjectLayout.WadsDirectoryName);
-
-        int wadCount =
+        int selectedWadCount =
             0;
 
         try
         {
-            if (Directory.Exists(
-                    wadDirectory))
+            if (_projectSession is not null)
             {
-                wadCount =
-                    Directory.GetFiles(
-                        wadDirectory,
-                        "*.wad",
-                        SearchOption.TopDirectoryOnly)
-                    .Length;
+                selectedWadCount =
+                    _projectWadSelectionService
+                        .GetMap(
+                            _projectSession,
+                            confirmedMapPath)
+                        .WadAssetIds
+                        .Count;
             }
         }
         catch
         {
-            wadCount =
+            selectedWadCount =
                 0;
         }
 
@@ -2872,16 +3083,16 @@ public partial class MainWindow
         if (isDusk)
         {
             ProjectNextStepDetailText.Text =
-                wadCount switch
+                selectedWadCount switch
                 {
                     0 =>
-                        "Your map is ready. Add WADs with Manage Assets when you need project textures, or start mapping now.",
+                        "No library WADs are selected for this map. Choose Map WADs now or start mapping without project textures.",
 
                     1 =>
-                        "1 project WAD is available. Companion will keep its project reference synchronized when the map opens.",
+                        "1 library WAD is selected for this map and will be synchronized with TrenchBroom.",
 
                     _ =>
-                        $"{wadCount:N0} project WADs are available. Companion will keep their project references synchronized when the map opens."
+                        $"{selectedWadCount:N0} library WADs are selected for this map and will be synchronized with TrenchBroom."
                 };
 
             CompileSettingsButton.ToolTip =
@@ -2890,22 +3101,22 @@ public partial class MainWindow
         else
         {
             ProjectNextStepDetailText.Text =
-                wadCount == 0
-                    ? "Your map is ready to edit. Add project textures with Manage Assets whenever you need them."
-                    : wadCount == 1
-                        ? "1 project WAD is available. Continue editing the selected map in TrenchBroom."
-                        : $"{wadCount:N0} project WADs are available. Continue editing the selected map in TrenchBroom.";
+                selectedWadCount == 0
+                    ? "No library WADs are selected for this map. Choose Map WADs whenever you need project textures."
+                    : selectedWadCount == 1
+                        ? "1 library WAD is selected for this map."
+                        : $"{selectedWadCount:N0} library WADs are selected for this map.";
 
             CompileSettingsButton.ToolTip =
                 "Compile Settings are available for DUSK projects.";
         }
 
         ManageAssetsButton.ToolTip =
-            wadCount == 0
-                ? "Add project texture archives"
-                : wadCount == 1
-                    ? "Manage 1 project WAD"
-                    : $"Manage {wadCount:N0} project WADs";
+            selectedWadCount == 0
+                ? $"Choose WADs for {mapName}"
+                : selectedWadCount == 1
+                    ? $"Manage 1 WAD selected for {mapName}"
+                    : $"Manage {selectedWadCount:N0} WADs selected for {mapName}";
 
         OpenCurrentMapButton.ToolTip =
             $"Open {mapName} in TrenchBroom";

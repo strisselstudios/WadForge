@@ -2,7 +2,7 @@
 
 public sealed class CompanionProjectManifest
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -17,6 +17,10 @@ public sealed class CompanionProjectManifest
     public CompanionProjectGameBinding? GameBinding { get; set; }
 
     public string? PreferredTextureArchiveFormat { get; set; }
+
+    public List<string> DefaultWadAssetIds { get; set; } = new();
+
+    public bool WadSelectionMigrationCompleted { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
 

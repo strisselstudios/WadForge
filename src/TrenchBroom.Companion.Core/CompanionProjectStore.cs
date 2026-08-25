@@ -317,6 +317,11 @@ public static class CompanionProjectStore
                 project.GameId,
                 project.PreferredTextureArchiveFormat);
 
+        project.DefaultWadAssetIds =
+            NormalizeWadAssetIds(
+                project.DefaultWadAssetIds,
+                "Project default WAD asset");
+
         if (project.GameBinding is not null)
         {
             project.GameBinding.GameInstallationDirectory =
@@ -362,6 +367,11 @@ public static class CompanionProjectStore
             {
                 map.DisplayName = map.DisplayName.Trim();
             }
+
+            map.WadAssetIds =
+                NormalizeWadAssetIds(
+                    map.WadAssetIds,
+                    $"Map '{map.DisplayName}' WAD asset");
         }
 
         if (string.IsNullOrWhiteSpace(project.ActiveMapPath))
@@ -385,6 +395,49 @@ public static class CompanionProjectStore
         }
     }
 
+    private static List<string> NormalizeWadAssetIds(
+        IEnumerable<string>? assetIds,
+        string description)
+    {
+        List<string> normalized =
+            new();
+
+        foreach (string assetId in
+                 assetIds ??
+                 Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(
+                    assetId))
+            {
+                continue;
+            }
+
+            string value =
+                assetId.Trim().ToUpperInvariant();
+
+            if (value.Length !=
+                    64 ||
+                value.Any(
+                    character =>
+                        !Uri.IsHexDigit(
+                            character)))
+            {
+                throw new InvalidDataException(
+                    $"{description} ID '{assetId}' is invalid.");
+            }
+
+            if (!normalized.Contains(
+                    value,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                normalized.Add(
+                    value);
+            }
+        }
+
+        return normalized;
+    }
+
     private static void MigrateToCurrentSchema(
         CompanionProjectManifest project)
     {
@@ -396,8 +449,11 @@ public static class CompanionProjectStore
 
         if (project.SchemaVersion == 1)
         {
-            project.GameBinding = null;
-            project.SchemaVersion = 2;
+            project.GameBinding =
+                null;
+
+            project.SchemaVersion =
+                2;
         }
 
         if (project.SchemaVersion == 2)
@@ -407,13 +463,30 @@ public static class CompanionProjectStore
                     project.GameId);
 
             project.SchemaVersion =
-                CompanionProjectManifest.CurrentSchemaVersion;
-
-            return;
+                4;
         }
 
         if (project.SchemaVersion == 3)
         {
+            project.SchemaVersion =
+                4;
+        }
+
+        if (project.SchemaVersion == 4)
+        {
+            project.DefaultWadAssetIds ??=
+                new List<string>();
+
+            project.Maps ??=
+                new List<CompanionProjectMap>();
+
+            foreach (CompanionProjectMap map in
+                     project.Maps)
+            {
+                map.WadAssetIds ??=
+                    new List<string>();
+            }
+
             project.SchemaVersion =
                 CompanionProjectManifest.CurrentSchemaVersion;
 
@@ -423,10 +496,9 @@ public static class CompanionProjectStore
         throw new InvalidDataException(
             $"Unsupported Companion project schema version " +
             $"'{project.SchemaVersion}'. " +
-            $"Expected version 1, 2, 3, or " +
+            $"Expected version 1, 2, 3, 4, or " +
             $"'{CompanionProjectManifest.CurrentSchemaVersion}'.");
     }
-
     private static string? NormalizeProjectTextureArchiveFormat(
         string gameId,
         string? preferredTextureArchiveFormat)

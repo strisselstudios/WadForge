@@ -8,6 +8,11 @@ namespace TrenchBroom.Companion.Core;
 
 public sealed class CompanionWadLibraryService
 {
+    private readonly Dictionary<string, CachedWadAsset>
+        _assetCache =
+            new(
+                StringComparer.OrdinalIgnoreCase);
+
     public CompanionWadLibraryImportResult Import(
         string managedDataRoot,
         string sourceWadPath)
@@ -65,7 +70,7 @@ public sealed class CompanionWadLibraryService
 
         string? existingByHash =
             FindExistingByHash(
-                libraryDirectory,
+                managedDataRoot,
                 sourceHash);
 
         if (!string.IsNullOrWhiteSpace(
@@ -75,15 +80,30 @@ public sealed class CompanionWadLibraryService
                 sourcePath,
                 existingByHash);
 
-            WadRegistrationResult existingInspection =
-                WadRegistrationService.Inspect(
+            CompanionWadLibraryAsset? existingAsset =
+                GetAsset(
                     existingByHash);
 
+            if (existingAsset is null)
+            {
+                WadRegistrationResult existingInspection =
+                    WadRegistrationService.Inspect(
+                        existingByHash);
+
+                return new CompanionWadLibraryImportResult(
+                    existingByHash,
+                    sourceHash,
+                    existingInspection.WadFormat,
+                    existingInspection.TextureCount,
+                    false,
+                    true);
+            }
+
             return new CompanionWadLibraryImportResult(
-                existingByHash,
-                sourceHash,
-                existingInspection.WadFormat,
-                existingInspection.TextureCount,
+                existingAsset.WadPath,
+                existingAsset.AssetId,
+                existingAsset.WadFormat,
+                existingAsset.TextureCount,
                 false,
                 true);
         }
@@ -126,6 +146,11 @@ public sealed class CompanionWadLibraryService
                     $"The managed library copy of '{Path.GetFileName(sourcePath)}' failed validation.");
             }
 
+            CacheAsset(
+                destinationPath,
+                sourceHash,
+                destinationInspection);
+
             return new CompanionWadLibraryImportResult(
                 destinationPath,
                 sourceHash,
@@ -136,6 +161,10 @@ public sealed class CompanionWadLibraryService
         }
         catch
         {
+            _assetCache.Remove(
+                Path.GetFullPath(
+                    destinationPath));
+
             string destinationManifest =
                 destinationPath +
                 ".wadforge.json";
@@ -189,6 +218,97 @@ public sealed class CompanionWadLibraryService
                     path,
                 StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    public IReadOnlyList<CompanionWadLibraryAsset> GetAssets(
+        string managedDataRoot)
+    {
+        IReadOnlyList<string> wadPaths =
+            GetWadPaths(
+                managedDataRoot);
+
+        HashSet<string> existingPaths =
+            wadPaths.ToHashSet(
+                StringComparer.OrdinalIgnoreCase);
+
+        string libraryDirectory =
+            Path.GetFullPath(
+                CompanionManagedDataRootService
+                    .GetWadLibraryDirectory(
+                        managedDataRoot))
+            .TrimEnd(
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar) +
+            Path.DirectorySeparatorChar;
+
+        foreach (string cachedPath in
+                 _assetCache.Keys.ToArray())
+        {
+            if (cachedPath.StartsWith(
+                    libraryDirectory,
+                    StringComparison.OrdinalIgnoreCase) &&
+                !existingPaths.Contains(
+                    cachedPath))
+            {
+                _assetCache.Remove(
+                    cachedPath);
+            }
+        }
+
+        List<CompanionWadLibraryAsset> assets =
+            new();
+
+        foreach (string wadPath in
+                 wadPaths)
+        {
+            CompanionWadLibraryAsset? asset =
+                GetAsset(
+                    wadPath);
+
+            if (asset is not null)
+            {
+                assets.Add(
+                    asset);
+            }
+        }
+
+        return assets
+            .OrderBy(
+                asset =>
+                    asset.WadFormat,
+                StringComparer.OrdinalIgnoreCase)
+            .ThenBy(
+                asset =>
+                    asset.DisplayName,
+                StringComparer.OrdinalIgnoreCase)
+            .ThenBy(
+                asset =>
+                    asset.WadPath,
+                StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public CompanionWadLibraryAsset? FindAsset(
+        string managedDataRoot,
+        string assetId)
+    {
+        if (string.IsNullOrWhiteSpace(
+                assetId))
+        {
+            return null;
+        }
+
+        string normalized =
+            assetId.Trim().ToUpperInvariant();
+
+        return GetAssets(
+                managedDataRoot)
+            .FirstOrDefault(
+                asset =>
+                    string.Equals(
+                        asset.AssetId,
+                        normalized,
+                        StringComparison.OrdinalIgnoreCase));
     }
 
     public bool IsLibraryWad(
@@ -262,37 +382,121 @@ public sealed class CompanionWadLibraryService
             File.Delete(
                 fullPath);
         }
+
+        _assetCache.Remove(
+            fullPath);
     }
 
-    private static string? FindExistingByHash(
-        string libraryDirectory,
-        string sourceHash)
+    private CompanionWadLibraryAsset? GetAsset(
+        string wadPath)
     {
-        foreach (string candidate in
-                 Directory.EnumerateFiles(
-                     libraryDirectory,
-                     "*.wad",
-                     SearchOption.TopDirectoryOnly))
+        string fullPath =
+            Path.GetFullPath(
+                wadPath);
+
+        if (!File.Exists(
+                fullPath))
         {
-            try
-            {
-                if (string.Equals(
-                        ComputeSha256(
-                            candidate),
-                        sourceHash,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    return Path.GetFullPath(
-                        candidate);
-                }
-            }
-            catch
-            {
-                // A bad library entry should not prevent importing a valid WAD.
-            }
+            _assetCache.Remove(
+                fullPath);
+
+            return null;
         }
 
-        return null;
+        FileInfo info =
+            new(
+                fullPath);
+
+        if (_assetCache.TryGetValue(
+                fullPath,
+                out CachedWadAsset? cached) &&
+            cached is not null &&
+            cached.Length ==
+                info.Length &&
+            cached.LastWriteUtcTicks ==
+                info.LastWriteTimeUtc.Ticks)
+        {
+            return cached.Asset;
+        }
+
+        WadRegistrationResult inspection =
+            WadRegistrationService.Inspect(
+                fullPath);
+
+        if (!inspection.WadIsValid)
+        {
+            _assetCache.Remove(
+                fullPath);
+
+            return null;
+        }
+
+        string sha256 =
+            ComputeSha256(
+                fullPath);
+
+        CompanionWadLibraryAsset asset =
+            new(
+                sha256,
+                fullPath,
+                inspection.WadFormat,
+                inspection.TextureCount,
+                Path.GetFileName(
+                    fullPath));
+
+        _assetCache[fullPath] =
+            new CachedWadAsset(
+                info.Length,
+                info.LastWriteTimeUtc.Ticks,
+                asset);
+
+        return asset;
+    }
+
+    private void CacheAsset(
+        string wadPath,
+        string sha256,
+        WadRegistrationResult inspection)
+    {
+        string fullPath =
+            Path.GetFullPath(
+                wadPath);
+
+        FileInfo info =
+            new(
+                fullPath);
+
+        CompanionWadLibraryAsset asset =
+            new(
+                sha256,
+                fullPath,
+                inspection.WadFormat,
+                inspection.TextureCount,
+                Path.GetFileName(
+                    fullPath));
+
+        _assetCache[fullPath] =
+            new CachedWadAsset(
+                info.Length,
+                info.LastWriteTimeUtc.Ticks,
+                asset);
+    }
+
+    private string? FindExistingByHash(
+        string managedDataRoot,
+        string sourceHash)
+    {
+        CompanionWadLibraryAsset? existing =
+            GetAssets(
+                managedDataRoot)
+            .FirstOrDefault(
+                asset =>
+                    string.Equals(
+                        asset.AssetId,
+                        sourceHash,
+                        StringComparison.OrdinalIgnoreCase));
+
+        return existing?.WadPath;
     }
 
     private static string GetCollisionSafeDestination(
@@ -371,7 +575,19 @@ public sealed class CompanionWadLibraryService
             SHA256.HashData(
                 stream));
     }
+
+    private sealed record CachedWadAsset(
+        long Length,
+        long LastWriteUtcTicks,
+        CompanionWadLibraryAsset Asset);
 }
+
+public sealed record CompanionWadLibraryAsset(
+    string AssetId,
+    string WadPath,
+    string WadFormat,
+    int TextureCount,
+    string DisplayName);
 
 public sealed record CompanionWadLibraryImportResult(
     string WadPath,
