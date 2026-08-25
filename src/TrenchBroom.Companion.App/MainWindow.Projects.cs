@@ -48,6 +48,7 @@ public partial class MainWindow
     private string? _gameInstallationDirectory;
 
     private bool _refreshingMapList;
+    private string? _projectReadinessPreparationProblem;
 
     private bool _projectGameSelectionHooked;
 
@@ -218,6 +219,8 @@ public partial class MainWindow
                         _projectSession,
                         dialog.FirstMapName);
             }
+
+            TryPrepareCurrentProjectReadiness();
 
             RegisterRecentProject(
                 _projectSession.ProjectDirectory);
@@ -404,6 +407,8 @@ public partial class MainWindow
         _gameInstallationDirectory =
             ResolveProjectGameInstallation(
                 gameProfile);
+
+        TryPrepareCurrentProjectReadiness();
 
         RegisterRecentProject(
             _projectSession.ProjectDirectory);
@@ -1360,6 +1365,8 @@ public partial class MainWindow
                 result.ImportedWadCount >
                     0)
             {
+                TryPrepareCurrentProjectReadiness();
+
                 RefreshProjectInterface();
 
                 StatusText.Text =
@@ -1635,6 +1642,9 @@ public partial class MainWindow
         CompanionTrenchBroomMapIdentityService.EnsureMapIdentity(
             activeMapPath,
             gameId);
+
+        _projectReadinessPreparationProblem = null;
+        RefreshProjectReadinessIndicator();
 
         return true;
     }
@@ -1918,6 +1928,8 @@ public partial class MainWindow
                 selectedMap.FullPath);
 
             _projectSession.Save();
+
+            TryPrepareCurrentProjectReadiness();
 
             RefreshProjectInterface();
 
@@ -2298,6 +2310,300 @@ public partial class MainWindow
         }
     }
 
+    private void TryPrepareCurrentProjectReadiness()
+    {
+        _projectReadinessPreparationProblem =
+            null;
+
+        if (_projectSession is null)
+        {
+            return;
+        }
+
+        try
+        {
+            ResolveTrenchBroomInstallation();
+
+            if (!string.Equals(
+                    _projectSession.Project.GameId,
+                    CompanionGameProfiles.Dusk.Id,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (_installation is null ||
+                !_installation.IsValid ||
+                !_installation.IsWadForgeCompatible ||
+                !IsManagedTrenchBroom())
+            {
+                return;
+            }
+
+            string managedDataRoot =
+                CompanionManagedDataRootService.GetRequiredRoot(
+                    _settings);
+
+            CompanionTrenchBroomGameConfigService.EnsureDuskGameConfig(
+                _installation.ExecutablePath);
+
+            CompanionDuskTrenchBroomEnvironmentService.Ensure(
+                _installation.ExecutablePath,
+                managedDataRoot);
+
+            CompanionEricwToolchainService.EnsureProvisioned(
+                AppContext.BaseDirectory,
+                managedDataRoot);
+
+            CompanionDuskAuthoringResourceStatus authoringStatus =
+                CompanionDuskAuthoringResourceService.GetStatus(
+                    _installation.ExecutablePath);
+
+            if (!authoringStatus.IsReady)
+            {
+                return;
+            }
+
+            string? activeMapPath =
+                null;
+
+            if (!string.IsNullOrWhiteSpace(
+                    _projectSession.Project.ActiveMapPath))
+            {
+                try
+                {
+                    activeMapPath =
+                        _projectSession.GetActiveMapFullPath();
+                }
+                catch
+                {
+                    activeMapPath =
+                        null;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    activeMapPath) &&
+                File.Exists(
+                    activeMapPath))
+            {
+                PrepareDuskCompilerProfile();
+            }
+        }
+        catch (Exception exception)
+        {
+            _projectReadinessPreparationProblem =
+                exception.Message;
+        }
+    }
+
+    private ProjectReadinessSummary EvaluateProjectReadiness()
+    {
+        if (_projectSession is null)
+        {
+            return new ProjectReadinessSummary(
+                true,
+                "Companion ready",
+                "Create or open a project to begin.");
+        }
+
+        CompanionGameProfile gameProfile;
+
+        try
+        {
+            gameProfile =
+                CompanionGameProfiles.GetRequired(
+                    _projectSession.Project.GameId);
+        }
+        catch (Exception exception)
+        {
+            return new ProjectReadinessSummary(
+                false,
+                "Setup needs attention",
+                exception.Message);
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                _gameInstallationDirectory) ||
+            !_gameInstallationLocator.IsInstallationDirectory(
+                gameProfile,
+                _gameInstallationDirectory))
+        {
+            return new ProjectReadinessSummary(
+                false,
+                "Game setup needed",
+                $"Companion needs a valid {gameProfile.DisplayName} installation for this project.");
+        }
+
+        if (_installation is null ||
+            !_installation.IsValid ||
+            !File.Exists(
+                _installation.ExecutablePath))
+        {
+            return new ProjectReadinessSummary(
+                false,
+                "TrenchBroom setup needed",
+                "Open Settings and set up a valid TrenchBroom installation.");
+        }
+
+        bool isDusk =
+            string.Equals(
+                gameProfile.Id,
+                CompanionGameProfiles.Dusk.Id,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (isDusk)
+        {
+            if (!_installation.IsWadForgeCompatible ||
+                !IsManagedTrenchBroom())
+            {
+                return new ProjectReadinessSummary(
+                    false,
+                    "TrenchBroom setup needed",
+                    "DUSK projects require the Companion-managed compatible TrenchBroom build.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    _projectReadinessPreparationProblem))
+            {
+                return new ProjectReadinessSummary(
+                    false,
+                    "Setup needs attention",
+                    _projectReadinessPreparationProblem);
+            }
+
+            try
+            {
+                string managedDataRoot =
+                    CompanionManagedDataRootService.GetRequiredRoot(
+                        _settings);
+
+                CompanionEricwToolchainStatus compilerStatus =
+                    CompanionEricwToolchainService.GetStatus(
+                        managedDataRoot);
+
+                if (!compilerStatus.IsReady)
+                {
+                    return new ProjectReadinessSummary(
+                        false,
+                        "Compiler setup needed",
+                        compilerStatus.Problem ??
+                        "The managed DUSK compiler is not ready.");
+                }
+
+                CompanionDuskAuthoringResourceStatus authoringStatus =
+                    CompanionDuskAuthoringResourceService.GetStatus(
+                        _installation.ExecutablePath);
+
+                if (!authoringStatus.IsReady)
+                {
+                    return new ProjectReadinessSummary(
+                        false,
+                        "DUSK resources needed",
+                        "Open a map in TrenchBroom and Companion will guide you to the DUSK mapping resource folder.");
+                }
+            }
+            catch (Exception exception)
+            {
+                return new ProjectReadinessSummary(
+                    false,
+                    "Setup needs attention",
+                    exception.Message);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(
+                     _projectReadinessPreparationProblem))
+        {
+            return new ProjectReadinessSummary(
+                false,
+                "Setup needs attention",
+                _projectReadinessPreparationProblem);
+        }
+
+        return new ProjectReadinessSummary(
+            true,
+            "Project ready",
+            $"{gameProfile.DisplayName}, TrenchBroom, and this project's managed workspace are ready.");
+    }
+
+    private void RefreshProjectReadinessIndicator()
+    {
+        ProjectReadinessSummary readiness =
+            EvaluateProjectReadiness();
+
+        ProjectReadinessText.Text =
+            readiness.BadgeText;
+
+        ProjectReadinessBorder.ToolTip =
+            readiness.Detail;
+
+        if (readiness.IsReady)
+        {
+            ProjectReadinessBorder.Background =
+                new SolidColorBrush(
+                    Color.FromRgb(
+                        0x17,
+                        0x26,
+                        0x1F));
+
+            ProjectReadinessBorder.BorderBrush =
+                new SolidColorBrush(
+                    Color.FromRgb(
+                        0x31,
+                        0x5D,
+                        0x46));
+
+            ProjectReadinessDot.Fill =
+                new SolidColorBrush(
+                    Color.FromRgb(
+                        0x6F,
+                        0xD1,
+                        0x9B));
+
+            ProjectReadinessText.Foreground =
+                new SolidColorBrush(
+                    Color.FromRgb(
+                        0xBD,
+                        0xEE,
+                        0xD2));
+
+            return;
+        }
+
+        ProjectReadinessBorder.Background =
+            new SolidColorBrush(
+                Color.FromRgb(
+                    0x2A,
+                    0x23,
+                    0x15));
+
+        ProjectReadinessBorder.BorderBrush =
+            new SolidColorBrush(
+                Color.FromRgb(
+                    0x6C,
+                    0x57,
+                    0x30));
+
+        ProjectReadinessDot.Fill =
+            new SolidColorBrush(
+                Color.FromRgb(
+                    0xE5,
+                    0xB8,
+                    0x5C));
+
+        ProjectReadinessText.Foreground =
+            new SolidColorBrush(
+                Color.FromRgb(
+                    0xF5,
+                    0xDD,
+                    0xA8));
+    }
+
+    private sealed record ProjectReadinessSummary(
+        bool IsReady,
+        string BadgeText,
+        string Detail);
+
     private void RefreshProjectInterface()
     {
         EnsureProjectControls();
@@ -2343,6 +2649,8 @@ public partial class MainWindow
 
             ProjectNextStepDetailText.Text =
                 string.Empty;
+
+            RefreshProjectReadinessIndicator();
 
             RefreshMapList(
                 activeMapPath: null);
@@ -2466,6 +2774,8 @@ public partial class MainWindow
         RefreshProjectGuidance(
             project,
             activeMapFullPath);
+
+        RefreshProjectReadinessIndicator();
     }
 
     private void RefreshProjectGuidance(

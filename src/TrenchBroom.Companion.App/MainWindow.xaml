@@ -536,10 +536,10 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="ShellContextText" Margin="0,0,12,0" VerticalAlignment="Center" Foreground="{StaticResource SecondaryTextBrush}" Text="No project open" />
-                    <Border Padding="10,5" Background="#17261F" BorderBrush="#315D46" BorderThickness="1" CornerRadius="12">
+                    <Border x:Name="ProjectReadinessBorder" Padding="10,5" Background="#17261F" BorderBrush="#315D46" BorderThickness="1" CornerRadius="12">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="7" Height="7" Margin="0,0,7,0" VerticalAlignment="Center" Fill="{StaticResource SuccessBrush}" />
-                            <TextBlock Foreground="#BDEED2" FontSize="12" FontWeight="SemiBold" Text="Companion ready" />
+                            <Ellipse x:Name="ProjectReadinessDot" Width="7" Height="7" Margin="0,0,7,0" VerticalAlignment="Center" Fill="{StaticResource SuccessBrush}" />
+                            <TextBlock x:Name="ProjectReadinessText" Foreground="#BDEED2" FontSize="12" FontWeight="SemiBold" Text="Companion ready" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
