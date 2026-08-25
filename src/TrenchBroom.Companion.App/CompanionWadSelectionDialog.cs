@@ -281,19 +281,66 @@ public sealed class CompanionWadSelectionDialog : Window
         defaultPanel.Children.Add(
             _projectDefaultCheckBox);
 
+        CheckBox? keepOppositeSelectionsCheckBox =
+            null;
+
         if (_preservedOppositeFormatSelections.Count >
             0)
         {
-            defaultPanel.Children.Add(
-                new TextBlock
+            List<string> preservedNames =
+                assets
+                    .Where(
+                        asset =>
+                            _preservedOppositeFormatSelections.Contains(
+                                asset.AssetId))
+                    .Select(
+                        asset =>
+                            asset.DisplayName)
+                    .OrderBy(
+                        name =>
+                            name,
+                        StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+            keepOppositeSelectionsCheckBox =
+                new CheckBox
                 {
-                    Text =
-                        $"{_preservedOppositeFormatSelections.Count:N0} existing {oppositeFormat} selection(s) are preserved but cannot be edited while this project uses {_preferredWadFormat}.",
+                    Content =
+                        $"Keep these existing {_preservedOppositeFormatSelections.Count:N0} {oppositeFormat} selection(s)",
+
+                    IsChecked =
+                        true,
 
                     Margin =
                         new Thickness(
                             0,
-                            6,
+                            8,
+                            0,
+                            0),
+
+                    Foreground =
+                        Brushes.White,
+
+                    HorizontalAlignment =
+                        HorizontalAlignment.Left,
+
+                    ToolTip =
+                        $"Uncheck this to remove the existing {oppositeFormat} WAD selections from this map. New {oppositeFormat} WADs cannot be added while this project uses {_preferredWadFormat}."
+                };
+
+            defaultPanel.Children.Add(
+                keepOppositeSelectionsCheckBox);
+
+            defaultPanel.Children.Add(
+                new TextBlock
+                {
+                    Text =
+                        $"Currently selected {oppositeFormat}: {string.Join(", ", preservedNames)}",
+
+                    Margin =
+                        new Thickness(
+                            22,
+                            5,
                             0,
                             0),
 
@@ -307,7 +354,6 @@ public sealed class CompanionWadSelectionDialog : Window
                         TextWrapping.Wrap
                 });
         }
-
         Grid.SetRow(
             defaultPanel,
             4);
@@ -409,18 +455,21 @@ public sealed class CompanionWadSelectionDialog : Window
                         .Cast<string>()
                         .ToList();
 
-                foreach (string preserved in
-                         _preservedOppositeFormatSelections)
+                if (keepOppositeSelectionsCheckBox?.IsChecked ==
+                    true)
                 {
-                    if (!selectedIds.Contains(
-                            preserved,
-                            StringComparer.OrdinalIgnoreCase))
+                    foreach (string preserved in
+                             _preservedOppositeFormatSelections)
                     {
-                        selectedIds.Add(
-                            preserved);
+                        if (!selectedIds.Contains(
+                                preserved,
+                                StringComparer.OrdinalIgnoreCase))
+                        {
+                            selectedIds.Add(
+                                preserved);
+                        }
                     }
                 }
-
                 SelectedAssetIds =
                     selectedIds;
 

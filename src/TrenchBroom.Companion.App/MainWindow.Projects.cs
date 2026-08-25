@@ -42,6 +42,9 @@ public partial class MainWindow
     private readonly CompanionProjectWadSelectionService
         _projectWadSelectionService =
             new();
+    private readonly CompanionProjectWadLibraryBindingService
+        _projectWadLibraryBindingService =
+            new();
 
     private readonly CompanionProjectLayout
         _projectLayout =
@@ -1572,13 +1575,30 @@ public partial class MainWindow
                 return;
             }
 
-            CompanionProjectWadReconciliationResult result =
-                _projectWadService.ReconcileReferencedMapWads(
+            string managedDataRoot =
+                CompanionManagedDataRootService.GetRequiredRoot(
+                    _settings);
+
+            CompanionProjectWadLibraryReconciliationResult result =
+                _projectWadLibraryBindingService.ReconcileMapReferencesToLibrary(
                     _projectSession,
-                    mapPath);
+                    mapPath,
+                    managedDataRoot,
+                    _wadLibraryService,
+                    _projectWadService);
+
+            if (result.ImportedToLibraryCount >
+                0)
+            {
+                SynchronizeRegisteredWadsWithLibrary(
+                    managedDataRoot,
+                    adoptExternalWads: false);
+
+                SaveSettings();
+            }
 
             if (result.Changed ||
-                result.ImportedWadCount >
+                result.ImportedToLibraryCount >
                     0)
             {
                 TryPrepareCurrentProjectReadiness();
@@ -1586,20 +1606,20 @@ public partial class MainWindow
                 RefreshProjectInterface();
 
                 StatusText.Text =
-                    result.ImportedWadCount ==
+                    result.ImportedToLibraryCount ==
                     1
-                        ? "Added 1 WAD from TrenchBroom to this project's managed assets."
-                        : result.ImportedWadCount >
+                        ? "Imported 1 WAD from TrenchBroom into the central library and updated this map's selection."
+                        : result.ImportedToLibraryCount >
                             1
-                            ? $"Added {result.ImportedWadCount:N0} WADs from TrenchBroom to this project's managed assets."
-                            : "Updated this map to use the project's managed WAD references.";
+                            ? $"Imported {result.ImportedToLibraryCount:N0} WADs from TrenchBroom into the central library and updated this map's selection."
+                            : "Updated this map to use its canonical central-library WAD selection.";
             }
 
             if (result.HasIssues)
             {
                 MessageBox.Show(
                     this,
-                    BuildProjectWadReconciliationWarning(
+                    BuildWadLibraryReconciliationWarning(
                         result),
                     "Map Asset Check",
                     MessageBoxButton.OK,
@@ -1613,14 +1633,13 @@ public partial class MainWindow
                 exception.Message;
         }
     }
-
-    private static string BuildProjectWadReconciliationWarning(
-        CompanionProjectWadReconciliationResult result)
+    private static string BuildWadLibraryReconciliationWarning(
+        CompanionProjectWadLibraryReconciliationResult result)
     {
         List<string> lines =
             new()
             {
-                "Companion found WAD references that could not be added to the project automatically.",
+                "Companion found WAD references that could not be adopted into this map's central-library selection automatically.",
                 string.Empty
             };
 
@@ -1644,13 +1663,12 @@ public partial class MainWindow
             string.Empty);
 
         lines.Add(
-            "The original external WAD files were not changed.");
+            "External source WAD files were not changed.");
 
         return string.Join(
             Environment.NewLine,
             lines);
     }
-
     private bool IsManagedTrenchBroomProcessRunning()
     {
         if (_installation is null)
@@ -1765,29 +1783,51 @@ public partial class MainWindow
 
         string gameId =
             _projectSession.Project.GameId;
-        CompanionProjectWadReconciliationResult wadReconciliation =
-            _projectWadService.ReconcileReferencedMapWads(
+
+        string managedDataRoot =
+            CompanionManagedDataRootService.GetRequiredRoot(
+                _settings);
+
+        CompanionProjectMap wadMap =
+            _projectWadSelectionService.GetMap(
                 _projectSession,
                 activeMapPath);
 
-        bool isDuskProject =
-            string.Equals(
-                gameId,
-                CompanionGameProfiles.Dusk.Id,
-                StringComparison.OrdinalIgnoreCase);
-
-        if (!isDuskProject &&
-            wadReconciliation.HasIssues)
+        if (wadMap.WadAssetIds.Count ==
+            0)
         {
-            MessageBox.Show(
-                this,
-                BuildProjectWadReconciliationWarning(
-                    wadReconciliation),
-                "Map Asset Check",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            CompanionProjectWadLibraryReconciliationResult wadReconciliation =
+                _projectWadLibraryBindingService.ReconcileMapReferencesToLibrary(
+                    _projectSession,
+                    activeMapPath,
+                    managedDataRoot,
+                    _wadLibraryService,
+                    _projectWadService);
+
+            if (wadReconciliation.HasIssues)
+            {
+                MessageBox.Show(
+                    this,
+                    BuildWadLibraryReconciliationWarning(
+                        wadReconciliation),
+                    "Map Asset Check",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return false;
+            }
         }
 
+        IReadOnlyList<string> selectedWadPaths =
+            _projectWadLibraryBindingService.ResolveSelectedWadPaths(
+                _projectSession,
+                activeMapPath,
+                managedDataRoot,
+                _wadLibraryService);
+
+        _projectWadService.SynchronizeMapWorldspawnWads(
+            activeMapPath,
+            selectedWadPaths);
         if (string.Equals(
                 gameId,
                 CompanionGameProfiles.Dusk.Id,
@@ -1839,6 +1879,9 @@ public partial class MainWindow
                     _projectWadService,
                     _settings.RegisteredWadPaths,
                     duskPalettePath);
+            _projectWadService.SynchronizeMapWorldspawnWads(
+                activeMapPath,
+                selectedWadPaths);
 
             if (assetNormalization.NormalizationChanged &&
                 assetNormalization.HasWarnings)
