@@ -2069,10 +2069,12 @@ public partial class MainWindow
                 CompanionGameProfiles.Dusk.Id,
                 stableToolchain.Version);
 
-        string projectWadDirectory =
-            Path.Combine(
-                _projectSession.ProjectDirectory,
-                CompanionProjectLayout.WadsDirectoryName);
+        string wadLibraryDirectory =
+            CompanionManagedDataRootService.GetWadLibraryDirectory(
+                managedDataRoot);
+
+        Directory.CreateDirectory(
+            wadLibraryDirectory);
 
         string? activeMapPath =
             _projectSession.GetActiveMapFullPath();
@@ -2084,13 +2086,14 @@ public partial class MainWindow
                 activeMapPath)
                 ? CompanionDuskCompileModeService.Determine(
                     activeMapPath,
-                    projectWadDirectory)
+                    wadLibraryDirectory)
                 : new CompanionDuskCompileModeDecision(
                     CompanionDuskCompileMode.QuakeBsp,
                     Array.Empty<string>());
 
         CompanionDuskCompilationProfileContext compileContext =
-            CompanionDuskCompilationProfileContext.CreateQuake();
+            CompanionDuskCompilationProfileContext.CreateQuake(
+                wadLibraryDirectory);
 
         CompanionEricwToolchainStatus? halfLifeToolchain =
             null;
@@ -2137,7 +2140,8 @@ public partial class MainWindow
                     CompanionDuskCompileMode.HalfLifeBsp,
                     halfLifeToolchain,
                     companionExecutablePath,
-                    duskPalettePath);
+                    duskPalettePath,
+                    wadLibraryDirectory);
         }
 
         CompanionTrenchBroomCompilationProfileResult result =
@@ -2168,7 +2172,6 @@ public partial class MainWindow
         StatusText.Text =
             $"DUSK tooling ready - {compileModeText}, compile profile '{result.ProfileName}', and launch profile '{engineProfile.ProfileName}' are configured.";
     }
-
     private void ProjectMapListBox_SelectionChanged(
         object sender,
         SelectionChangedEventArgs e)

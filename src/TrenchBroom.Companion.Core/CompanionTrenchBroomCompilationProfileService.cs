@@ -18,16 +18,26 @@ public sealed record CompanionDuskCompilationProfileContext(
     CompanionDuskCompileMode Mode,
     CompanionEricwToolchainStatus? HalfLifeToolchain,
     string? CompanionExecutablePath,
-    string? DuskPalettePath)
+    string? DuskPalettePath,
+    string? WadLibraryDirectory = null)
 {
     public static CompanionDuskCompilationProfileContext CreateQuake() =>
         new(
             CompanionDuskCompileMode.QuakeBsp,
             null,
             null,
+            null,
             null);
-}
 
+    public static CompanionDuskCompilationProfileContext CreateQuake(
+        string wadLibraryDirectory) =>
+        new(
+            CompanionDuskCompileMode.QuakeBsp,
+            null,
+            null,
+            null,
+            wadLibraryDirectory);
+}
 public static class CompanionTrenchBroomCompilationProfileService
 {
     private const string ProfileName =
@@ -396,8 +406,12 @@ public static class CompanionTrenchBroomCompilationProfileService
         const string buildLux =
             "${MAP_DIR_PATH}/../build/${MAP_BASE_NAME}.lux";
 
-        const string projectWads =
-            "${MAP_DIR_PATH}/../wads";
+        string wadSearchDirectory =
+            !string.IsNullOrWhiteSpace(
+                context.WadLibraryDirectory)
+                ? ToTrenchBroomPath(
+                    context.WadLibraryDirectory)
+                : "${MAP_DIR_PATH}/../wads";
 
         const string halfLifeCacheWads =
             "${MAP_DIR_PATH}/../build/.dusk-hlbsp/${MAP_BASE_NAME}/wads";
@@ -434,7 +448,7 @@ public static class CompanionTrenchBroomCompilationProfileService
                     ["parameters"] =
                         "--dusk-compile-prep " +
                         $"--map \"{buildMap}\" " +
-                        $"--project-wads \"{projectWads}\" " +
+                        $"--project-wads \"{wadSearchDirectory}\" " +
                         $"--cache-wads \"{halfLifeCacheWads}\" " +
                         $"--palette \"{palettePath}\" " +
                         $"--log \"{prepLog}\"",
@@ -459,7 +473,7 @@ public static class CompanionTrenchBroomCompilationProfileService
                         schema,
                         halfLifeMode
                             ? halfLifeCacheWads
-                            : projectWads,
+                            : wadSearchDirectory,
                         buildMap,
                         buildBsp,
                         halfLifeMode),
