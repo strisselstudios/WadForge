@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -45,6 +46,7 @@ public partial class MainWindow
     private readonly CompanionProjectWadLibraryBindingService
         _projectWadLibraryBindingService =
             new();
+    private bool _legacyWadCleanupRunning;
 
     private readonly CompanionProjectLayout
         _projectLayout =
@@ -446,6 +448,7 @@ public partial class MainWindow
             _projectSession.ProjectDirectory);
 
         RefreshProjectInterface();
+        QueueLegacyProjectWadCleanup();
     }
 
     private void RegisterRecentProject(
@@ -908,6 +911,8 @@ public partial class MainWindow
                 _wadLibraryService,
                 _projectWadService);
 
+        QueueLegacyProjectWadCleanup();
+
         RefreshProjectInterface();
 
         StatusText.Text =
@@ -954,6 +959,122 @@ public partial class MainWindow
                 $"WAD selection migration completed with {migration.Issues.Count:N0} item(s) needing review.";
         }
     }
+    private void QueueLegacyProjectWadCleanup()
+    {
+        if (_legacyWadCleanupRunning ||
+            _projectSession is null ||
+            IsManagedTrenchBroomProcessRunning())
+        {
+            return;
+        }
+
+        try
+        {
+            string projectFilePath =
+                _projectSession.ProjectFilePath;
+
+            string projectDirectory =
+                Path.GetFullPath(
+                    _projectSession.ProjectDirectory);
+
+            string managedDataRoot =
+                CompanionManagedDataRootService.GetRequiredRoot(
+                    _settings);
+
+            _legacyWadCleanupRunning =
+                true;
+
+            _ =
+                RunLegacyProjectWadCleanupAsync(
+                    projectFilePath,
+                    projectDirectory,
+                    managedDataRoot);
+        }
+        catch (Exception exception)
+        {
+            _legacyWadCleanupRunning =
+                false;
+
+            StatusText.Text =
+                "Legacy WAD cleanup was deferred: " +
+                exception.Message;
+        }
+    }
+
+    private async Task RunLegacyProjectWadCleanupAsync(
+        string projectFilePath,
+        string projectDirectory,
+        string managedDataRoot)
+    {
+        try
+        {
+            CompanionLegacyProjectWadCleanupResult result =
+                await Task.Run(
+                    () =>
+                    {
+                        CompanionProjectManager manager =
+                            new();
+
+                        CompanionProjectSession cleanupSession =
+                            manager.Open(
+                                projectFilePath);
+
+                        CompanionProjectWadLibraryBindingService bindingService =
+                            new();
+
+                        return bindingService.CleanupLegacyProjectWads(
+                            cleanupSession,
+                            managedDataRoot,
+                            new CompanionWadLibraryService(),
+                            new CompanionProjectWadService());
+                    });
+
+            bool sameProject =
+                _projectSession is not null &&
+                string.Equals(
+                    Path.GetFullPath(
+                        _projectSession.ProjectDirectory),
+                    projectDirectory,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (!sameProject)
+            {
+                return;
+            }
+
+            if (result.DeletedWadCount >
+                0)
+            {
+                StatusText.Text =
+                    result.DeletedWadCount ==
+                    1
+                        ? "Removed 1 verified redundant project WAD copy. The central-library copy remains."
+                        : $"Removed {result.DeletedWadCount:N0} verified redundant project WAD copies. Central-library copies remain.";
+            }
+            else if (result.HasIssues)
+            {
+                StatusText.Text =
+                    $"Legacy WAD cleanup was deferred because {result.Issues.Count:N0} safety check(s) are not yet satisfied.";
+            }
+            else if (result.RemovedLegacyDirectory)
+            {
+                StatusText.Text =
+                    "Removed the empty legacy project WAD folder.";
+            }
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text =
+                "Legacy WAD cleanup was deferred: " +
+                exception.Message;
+        }
+        finally
+        {
+            _legacyWadCleanupRunning =
+                false;
+        }
+    }
+
     private void ProjectUtilities_Click(
         object sender,
         RoutedEventArgs e)

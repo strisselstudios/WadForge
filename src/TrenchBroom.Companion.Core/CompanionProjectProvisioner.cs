@@ -140,8 +140,6 @@ public sealed class CompanionProjectProvisioner
         Directory.CreateDirectory(
             sourceMapsDirectory);
 
-        Directory.CreateDirectory(
-            wadsDirectory);
 
         Directory.CreateDirectory(
             skyboxesDirectory);

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 
 namespace TrenchBroom.Companion.Core;
 
@@ -227,6 +228,416 @@ public sealed class CompanionProjectWadLibraryBindingService
             issues);
     }
 
+    public CompanionLegacyProjectWadCleanupResult CleanupLegacyProjectWads(
+        CompanionProjectSession session,
+        string managedDataRoot,
+        CompanionWadLibraryService libraryService,
+        CompanionProjectWadService projectWadService)
+    {
+        ArgumentNullException.ThrowIfNull(
+            session);
+
+        ArgumentNullException.ThrowIfNull(
+            libraryService);
+
+        ArgumentNullException.ThrowIfNull(
+            projectWadService);
+
+        List<string> issues =
+            new();
+
+        if (!session.Project.WadSelectionMigrationCompleted)
+        {
+            issues.Add(
+                "Project WAD selection migration has not completed.");
+
+            return new CompanionLegacyProjectWadCleanupResult(
+                0,
+                false,
+                issues);
+        }
+
+        IReadOnlyList<string> legacyWads =
+            projectWadService.GetProjectWadPaths(
+                session);
+
+        string legacyDirectory =
+            Path.Combine(
+                session.ProjectDirectory,
+                CompanionProjectLayout.WadsDirectoryName);
+
+        foreach (CompanionProjectMap map in
+                 session.Project.Maps)
+        {
+            string fullMapPath =
+                CompanionProjectStore.ResolveMapPath(
+                    session.ProjectFilePath,
+                    map.Path);
+
+            if (!File.Exists(
+                    fullMapPath))
+            {
+                issues.Add(
+                    $"{map.DisplayName}: map file is missing.");
+
+                continue;
+            }
+
+            IReadOnlyList<string> references;
+
+            try
+            {
+                references =
+                    projectWadService.GetMapWadReferences(
+                        fullMapPath);
+            }
+            catch (Exception exception)
+            {
+                issues.Add(
+                    $"{map.DisplayName}: could not read map WAD references: {exception.Message}");
+
+                continue;
+            }
+
+            if (map.WadAssetIds.Count ==
+                0)
+            {
+                if (references.Count >
+                    0)
+                {
+                    issues.Add(
+                        $"{map.DisplayName}: map still has WAD references but has no central-library WAD selection.");
+                }
+
+                continue;
+            }
+
+            try
+            {
+                IReadOnlyList<string> selectedPaths =
+                    ResolveSelectedWadPaths(
+                        session,
+                        fullMapPath,
+                        managedDataRoot,
+                        libraryService);
+
+                if (!ReferencesMatchSelectedLibraryPaths(
+                        references,
+                        selectedPaths,
+                        managedDataRoot,
+                        libraryService))
+                {
+                    issues.Add(
+                        $"{map.DisplayName}: map WAD references do not yet match its selected central-library WAD paths.");
+                }
+            }
+            catch (Exception exception)
+                when (exception is
+                    IOException or
+                    UnauthorizedAccessException or
+                    InvalidDataException or
+                    InvalidOperationException)
+            {
+                issues.Add(
+                    $"{map.DisplayName}: {exception.Message}");
+            }
+        }
+
+        if (issues.Count >
+            0)
+        {
+            return new CompanionLegacyProjectWadCleanupResult(
+                0,
+                false,
+                issues);
+        }
+
+        List<LegacyDeletionCandidate> candidates =
+            new();
+
+        foreach (string legacyWad in
+                 legacyWads)
+        {
+            try
+            {
+                string legacyHash =
+                    ComputeSha256(
+                        legacyWad);
+
+                CompanionWadLibraryAsset? libraryAsset =
+                    libraryService.FindAsset(
+                        managedDataRoot,
+                        legacyHash);
+
+                if (libraryAsset is null)
+                {
+                    throw new InvalidOperationException(
+                        "No byte-identical central-library asset was found.");
+                }
+
+                string canonicalPath =
+                    Path.GetFullPath(
+                        libraryAsset.WadPath);
+
+                if (!File.Exists(
+                        canonicalPath) ||
+                    !libraryService.IsLibraryWad(
+                        managedDataRoot,
+                        canonicalPath))
+                {
+                    throw new InvalidOperationException(
+                        "The matching central-library WAD could not be verified.");
+                }
+
+                string canonicalHash =
+                    ComputeSha256(
+                        canonicalPath);
+
+                if (!string.Equals(
+                        legacyHash,
+                        canonicalHash,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(
+                        legacyHash,
+                        libraryAsset.AssetId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException(
+                        "The central-library WAD did not match the project WAD byte-for-byte.");
+                }
+
+                string legacySidecar =
+                    legacyWad +
+                    ".wadforge.json";
+
+                string canonicalSidecar =
+                    canonicalPath +
+                    ".wadforge.json";
+
+                string? sidecarToDelete =
+                    null;
+
+                if (File.Exists(
+                        legacySidecar))
+                {
+                    if (!File.Exists(
+                            canonicalSidecar) ||
+                        !FilesMatch(
+                            legacySidecar,
+                            canonicalSidecar))
+                    {
+                        throw new InvalidDataException(
+                            "The project WAD sidecar did not match the central-library sidecar byte-for-byte.");
+                    }
+
+                    sidecarToDelete =
+                        legacySidecar;
+                }
+
+                candidates.Add(
+                    new LegacyDeletionCandidate(
+                        Path.GetFullPath(
+                            legacyWad),
+                        sidecarToDelete));
+            }
+            catch (Exception exception)
+                when (exception is
+                    IOException or
+                    UnauthorizedAccessException or
+                    InvalidDataException or
+                    InvalidOperationException)
+            {
+                issues.Add(
+                    $"{Path.GetFileName(legacyWad)}: {exception.Message}");
+            }
+        }
+
+        if (issues.Count >
+            0)
+        {
+            return new CompanionLegacyProjectWadCleanupResult(
+                0,
+                false,
+                issues);
+        }
+
+        int deletedWadCount =
+            0;
+
+        foreach (LegacyDeletionCandidate candidate in
+                 candidates)
+        {
+            try
+            {
+                if (File.Exists(
+                        candidate.WadPath))
+                {
+                    File.Delete(
+                        candidate.WadPath);
+
+                    deletedWadCount++;
+                }
+
+                if (!string.IsNullOrWhiteSpace(
+                        candidate.SidecarPath) &&
+                    File.Exists(
+                        candidate.SidecarPath))
+                {
+                    File.Delete(
+                        candidate.SidecarPath);
+                }
+            }
+            catch (Exception exception)
+                when (exception is
+                    IOException or
+                    UnauthorizedAccessException)
+            {
+                issues.Add(
+                    $"{Path.GetFileName(candidate.WadPath)}: verified redundant copy could not be removed: {exception.Message}");
+            }
+        }
+
+        bool removedLegacyDirectory =
+            TryRemoveEmptyDirectory(
+                legacyDirectory);
+
+        return new CompanionLegacyProjectWadCleanupResult(
+            deletedWadCount,
+            removedLegacyDirectory,
+            issues);
+    }
+
+    private static bool ReferencesMatchSelectedLibraryPaths(
+        IReadOnlyList<string> references,
+        IReadOnlyList<string> selectedPaths,
+        string managedDataRoot,
+        CompanionWadLibraryService libraryService)
+    {
+        if (references.Count !=
+            selectedPaths.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0;
+             index < references.Count;
+             index++)
+        {
+            string platformReference =
+                references[index]
+                    .Replace(
+                        '/',
+                        Path.DirectorySeparatorChar)
+                    .Replace(
+                        '\\',
+                        Path.DirectorySeparatorChar);
+
+            if (!Path.IsPathRooted(
+                    platformReference))
+            {
+                return false;
+            }
+
+            string fullReference;
+
+            try
+            {
+                fullReference =
+                    Path.GetFullPath(
+                        platformReference);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (!libraryService.IsLibraryWad(
+                    managedDataRoot,
+                    fullReference) ||
+                !string.Equals(
+                    fullReference,
+                    Path.GetFullPath(
+                        selectedPaths[index]),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool FilesMatch(
+        string firstPath,
+        string secondPath)
+    {
+        FileInfo first =
+            new(
+                firstPath);
+
+        FileInfo second =
+            new(
+                secondPath);
+
+        return first.Length ==
+                second.Length &&
+            string.Equals(
+                ComputeSha256(
+                    firstPath),
+                ComputeSha256(
+                    secondPath),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ComputeSha256(
+        string filePath)
+    {
+        using FileStream stream =
+            File.OpenRead(
+                filePath);
+
+        return Convert.ToHexString(
+            SHA256.HashData(
+                stream));
+    }
+
+    private static bool TryRemoveEmptyDirectory(
+        string directory)
+    {
+        if (!Directory.Exists(
+                directory))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (Directory.EnumerateFileSystemEntries(
+                    directory)
+                .Any())
+            {
+                return false;
+            }
+
+            Directory.Delete(
+                directory,
+                recursive: false);
+
+            return true;
+        }
+        catch (Exception exception)
+            when (exception is
+                IOException or
+                UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private sealed record LegacyDeletionCandidate(
+        string WadPath,
+        string? SidecarPath);
+
     private static CompanionWadLibraryAsset? ResolveReferenceAsset(
         CompanionProjectSession session,
         string fullMapPath,
@@ -417,6 +828,16 @@ public sealed class CompanionProjectWadLibraryBindingService
             throw new InvalidOperationException(
                 $"Map '{relativePath}' is not registered in this Companion project.");
     }
+}
+
+public sealed record CompanionLegacyProjectWadCleanupResult(
+    int DeletedWadCount,
+    bool RemovedLegacyDirectory,
+    IReadOnlyList<string> Issues)
+{
+    public bool HasIssues =>
+        Issues.Count >
+        0;
 }
 
 public sealed record CompanionProjectWadLibraryReconciliationResult(
