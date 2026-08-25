@@ -1271,11 +1271,161 @@ public partial class MainWindow
             Path.GetFullPath(
                 activeMapPath));
 
-        Process.Start(
-            startInfo);
+        StartTrenchBroomWithProjectAssetWatch(
+            startInfo,
+            activeMapPath);
 
         StatusText.Text =
             $"Opened '{Path.GetFileName(activeMapPath)}' in TrenchBroom.";
+    }
+
+    private void StartTrenchBroomWithProjectAssetWatch(
+        ProcessStartInfo startInfo,
+        string mapPath)
+    {
+        if (_projectSession is null)
+        {
+            throw new InvalidOperationException(
+                "A Companion project is required.");
+        }
+
+        string projectDirectory =
+            Path.GetFullPath(
+                _projectSession.ProjectDirectory);
+
+        string fullMapPath =
+            Path.GetFullPath(
+                mapPath);
+
+        Process? process =
+            Process.Start(
+                startInfo);
+
+        if (process is null)
+        {
+            throw new InvalidOperationException(
+                "TrenchBroom did not start.");
+        }
+
+        process.EnableRaisingEvents =
+            true;
+
+        process.Exited +=
+            (_, _) =>
+            {
+                try
+                {
+                    Dispatcher.BeginInvoke(
+                        new Action(
+                            () =>
+                                ReconcileProjectAssetsAfterTrenchBroomExit(
+                                    projectDirectory,
+                                    fullMapPath)));
+                }
+                catch
+                {
+                    // Companion may already be shutting down.
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            };
+    }
+
+    private void ReconcileProjectAssetsAfterTrenchBroomExit(
+        string projectDirectory,
+        string mapPath)
+    {
+        try
+        {
+            if (_projectSession is null ||
+                !string.Equals(
+                    Path.GetFullPath(
+                        _projectSession.ProjectDirectory),
+                    projectDirectory,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !File.Exists(
+                    mapPath))
+            {
+                return;
+            }
+
+            CompanionProjectWadReconciliationResult result =
+                _projectWadService.ReconcileReferencedMapWads(
+                    _projectSession,
+                    mapPath);
+
+            if (result.Changed ||
+                result.ImportedWadCount >
+                    0)
+            {
+                RefreshProjectInterface();
+
+                StatusText.Text =
+                    result.ImportedWadCount ==
+                    1
+                        ? "Added 1 WAD from TrenchBroom to this project's managed assets."
+                        : result.ImportedWadCount >
+                            1
+                            ? $"Added {result.ImportedWadCount:N0} WADs from TrenchBroom to this project's managed assets."
+                            : "Updated this map to use the project's managed WAD references.";
+            }
+
+            if (result.HasIssues)
+            {
+                MessageBox.Show(
+                    this,
+                    BuildProjectWadReconciliationWarning(
+                        result),
+                    "Map Asset Check",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text =
+                "Companion could not reconcile map assets after TrenchBroom closed: " +
+                exception.Message;
+        }
+    }
+
+    private static string BuildProjectWadReconciliationWarning(
+        CompanionProjectWadReconciliationResult result)
+    {
+        List<string> lines =
+            new()
+            {
+                "Companion found WAD references that could not be added to the project automatically.",
+                string.Empty
+            };
+
+        foreach (string issue in
+                 result.Issues.Take(
+                     6))
+        {
+            lines.Add(
+                "- " +
+                issue);
+        }
+
+        if (result.Issues.Count >
+            6)
+        {
+            lines.Add(
+                $"- ...and {result.Issues.Count - 6:N0} more.");
+        }
+
+        lines.Add(
+            string.Empty);
+
+        lines.Add(
+            "The original external WAD files were not changed.");
+
+        return string.Join(
+            Environment.NewLine,
+            lines);
     }
 
     private bool IsManagedTrenchBroomProcessRunning()
@@ -1392,6 +1542,28 @@ public partial class MainWindow
 
         string gameId =
             _projectSession.Project.GameId;
+        CompanionProjectWadReconciliationResult wadReconciliation =
+            _projectWadService.ReconcileReferencedMapWads(
+                _projectSession,
+                activeMapPath);
+
+        bool isDuskProject =
+            string.Equals(
+                gameId,
+                CompanionGameProfiles.Dusk.Id,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (!isDuskProject &&
+            wadReconciliation.HasIssues)
+        {
+            MessageBox.Show(
+                this,
+                BuildProjectWadReconciliationWarning(
+                    wadReconciliation),
+                "Map Asset Check",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
 
         if (string.Equals(
                 gameId,

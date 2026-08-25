@@ -214,6 +214,182 @@ public sealed class CompanionProjectWadService
             .ToArray();
     }
 
+    public CompanionProjectWadReconciliationResult ReconcileReferencedMapWads(
+        CompanionProjectSession session,
+        string mapPath)
+    {
+        ArgumentNullException.ThrowIfNull(
+            session);
+
+        if (string.IsNullOrWhiteSpace(
+                mapPath))
+        {
+            throw new ArgumentException(
+                "A map path is required.",
+                nameof(mapPath));
+        }
+
+        string fullMapPath =
+            Path.GetFullPath(
+                mapPath);
+
+        if (!File.Exists(
+                fullMapPath))
+        {
+            throw new FileNotFoundException(
+                "The map could not be found.",
+                fullMapPath);
+        }
+
+        MapTextFile mapFile =
+            ReadMapTextFile(
+                fullMapPath);
+
+        string? wadProperty =
+            GetWorldspawnProperty(
+                mapFile.Text,
+                "wad");
+
+        if (string.IsNullOrWhiteSpace(
+                wadProperty))
+        {
+            return new CompanionProjectWadReconciliationResult(
+                0,
+                0,
+                false,
+                Array.Empty<string>(),
+                Array.Empty<string>());
+        }
+
+        string[] references =
+            UnescapeMapPropertyValue(
+                    wadProperty)
+                .Split(
+                    ';',
+                    StringSplitOptions.RemoveEmptyEntries |
+                    StringSplitOptions.TrimEntries);
+
+        if (references.Length ==
+            0)
+        {
+            return new CompanionProjectWadReconciliationResult(
+                0,
+                0,
+                false,
+                Array.Empty<string>(),
+                Array.Empty<string>());
+        }
+
+        string mapDirectory =
+            Path.GetDirectoryName(
+                fullMapPath) ??
+            session.ProjectDirectory;
+
+        List<string> managedWads =
+            new();
+
+        List<string> rewrittenReferences =
+            new();
+
+        List<string> issues =
+            new();
+
+        HashSet<string> seenManagedWads =
+            new(
+                StringComparer.OrdinalIgnoreCase);
+
+        int importedWadCount =
+            0;
+
+        foreach (string reference in
+                 references)
+        {
+            string? resolvedPath =
+                ResolveReferencedWadPath(
+                    session,
+                    mapDirectory,
+                    reference);
+
+            if (string.IsNullOrWhiteSpace(
+                    resolvedPath))
+            {
+                issues.Add(
+                    $"WAD reference could not be resolved: {reference}");
+
+                rewrittenReferences.Add(
+                    reference);
+
+                continue;
+            }
+
+            try
+            {
+                CompanionProjectWadImportResult imported =
+                    ImportIntoProject(
+                        session,
+                        resolvedPath);
+
+                if (imported.CopiedIntoProject)
+                {
+                    importedWadCount++;
+                }
+
+                string managedPath =
+                    Path.GetFullPath(
+                        imported.WadPath);
+
+                if (seenManagedWads.Add(
+                        managedPath))
+                {
+                    managedWads.Add(
+                        managedPath);
+
+                    rewrittenReferences.Add(
+                        managedPath.Replace(
+                            '\\',
+                            '/'));
+                }
+            }
+            catch (Exception exception)
+            {
+                issues.Add(
+                    $"{reference}: {exception.Message}");
+
+                rewrittenReferences.Add(
+                    reference);
+            }
+        }
+
+        string updatedText =
+            SetWorldspawnProperty(
+                mapFile.Text,
+                "wad",
+                string.Join(
+                    ";",
+                    rewrittenReferences));
+
+        bool changed =
+            !string.Equals(
+                updatedText,
+                mapFile.Text,
+                StringComparison.Ordinal);
+
+        if (changed)
+        {
+            WriteMapTextFileAtomically(
+                fullMapPath,
+                updatedText,
+                mapFile.Encoding);
+        }
+
+        return new CompanionProjectWadReconciliationResult(
+            references.Length,
+            importedWadCount,
+            changed,
+            managedWads,
+            issues);
+    }
+
     public CompanionProjectWadSyncResult SynchronizeMapWorldspawnWads(
         CompanionProjectSession session,
         string mapPath)
@@ -311,6 +487,171 @@ public sealed class CompanionProjectWadService
             validatedWads.Count,
             changed,
             validatedWads);
+    }
+
+    private static string? GetWorldspawnProperty(
+        string mapText,
+        string propertyName)
+    {
+        (int entityOpen, int entityClose) =
+            FindFirstEntityBounds(
+                mapText);
+
+        int propertyRegionStart =
+            entityOpen +
+            1;
+
+        int propertyRegionEnd =
+            FindFirstNestedOpeningBrace(
+                mapText,
+                propertyRegionStart,
+                entityClose);
+
+        string propertyRegion =
+            mapText[
+                propertyRegionStart..
+                propertyRegionEnd];
+
+        MatchCollection matches =
+            WorldPropertyPattern.Matches(
+                propertyRegion);
+
+        Match? classnameMatch =
+            matches
+                .Cast<Match>()
+                .FirstOrDefault(
+                    match =>
+                        string.Equals(
+                            match.Groups["key"].Value,
+                            "classname",
+                            StringComparison.Ordinal));
+
+        if (classnameMatch is null ||
+            !string.Equals(
+                classnameMatch.Groups["value"].Value,
+                "worldspawn",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "The first map entity is not a valid worldspawn entity.");
+        }
+
+        Match[] propertyMatches =
+            matches
+                .Cast<Match>()
+                .Where(
+                    match =>
+                        string.Equals(
+                            match.Groups["key"].Value,
+                            propertyName,
+                            StringComparison.Ordinal))
+                .ToArray();
+
+        if (propertyMatches.Length >
+            1)
+        {
+            throw new InvalidDataException(
+                $"The worldspawn contains more than one '{propertyName}' property.");
+        }
+
+        return propertyMatches.Length ==
+            1
+                ? propertyMatches[0]
+                    .Groups["value"]
+                    .Value
+                : null;
+    }
+
+    private static string? ResolveReferencedWadPath(
+        CompanionProjectSession session,
+        string mapDirectory,
+        string reference)
+    {
+        if (string.IsNullOrWhiteSpace(
+                reference))
+        {
+            return null;
+        }
+
+        string platformReference =
+            reference
+                .Replace(
+                    '/',
+                    Path.DirectorySeparatorChar)
+                .Replace(
+                    '\\',
+                    Path.DirectorySeparatorChar);
+
+        try
+        {
+            if (Path.IsPathRooted(
+                    platformReference))
+            {
+                string rooted =
+                    Path.GetFullPath(
+                        platformReference);
+
+                if (File.Exists(
+                        rooted))
+                {
+                    return rooted;
+                }
+            }
+            else
+            {
+                string mapRelative =
+                    Path.GetFullPath(
+                        Path.Combine(
+                            mapDirectory,
+                            platformReference));
+
+                if (File.Exists(
+                        mapRelative))
+                {
+                    return mapRelative;
+                }
+            }
+        }
+        catch
+        {
+            // Fall through to the managed project filename lookup.
+        }
+
+        string fileName =
+            Path.GetFileName(
+                platformReference);
+
+        if (string.IsNullOrWhiteSpace(
+                fileName))
+        {
+            return null;
+        }
+
+        string managedCandidate =
+            Path.GetFullPath(
+                Path.Combine(
+                    GetProjectWadsDirectory(
+                        session),
+                    fileName));
+
+        return File.Exists(
+                managedCandidate)
+            ? managedCandidate
+            : null;
+    }
+
+    private static string UnescapeMapPropertyValue(
+        string value)
+    {
+        return value
+            .Replace(
+                "\\\\",
+                "\\",
+                StringComparison.Ordinal)
+            .Replace(
+                "\\\"",
+                "\"",
+                StringComparison.Ordinal);
     }
 
     private static string GetProjectWadsDirectory(
@@ -961,6 +1302,18 @@ public sealed record CompanionProjectWadImportResult(
     string Format,
     int LumpCount,
     bool CopiedIntoProject);
+
+public sealed record CompanionProjectWadReconciliationResult(
+    int ReferencedWadCount,
+    int ImportedWadCount,
+    bool Changed,
+    IReadOnlyList<string> ManagedWadPaths,
+    IReadOnlyList<string> Issues)
+{
+    public bool HasIssues =>
+        Issues.Count >
+        0;
+}
 
 public sealed record CompanionProjectWadSyncResult(
     int WadCount,
