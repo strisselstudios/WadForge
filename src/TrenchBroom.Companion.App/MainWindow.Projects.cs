@@ -1876,8 +1876,7 @@ public partial class MainWindow
                 CompanionImportedMapAssetService.NormalizeForDusk(
                     _projectSession,
                     activeMapPath,
-                    _projectWadService,
-                    _settings.RegisteredWadPaths,
+                    selectedWadPaths,
                     duskPalettePath);
             _projectWadService.SynchronizeMapWorldspawnWads(
                 activeMapPath,

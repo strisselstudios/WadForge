@@ -46,18 +46,14 @@ public static class CompanionImportedMapAssetService
     public static CompanionImportedMapAssetNormalizationResult NormalizeForDusk(
         CompanionProjectSession session,
         string mapPath,
-        CompanionProjectWadService projectWadService,
-        IEnumerable<string> registeredWadPaths,
+        IEnumerable<string> selectedWadPaths,
         string duskPalettePath)
     {
         ArgumentNullException.ThrowIfNull(
             session);
 
         ArgumentNullException.ThrowIfNull(
-            projectWadService);
-
-        ArgumentNullException.ThrowIfNull(
-            registeredWadPaths);
+            selectedWadPaths);
 
         if (string.IsNullOrWhiteSpace(
                 mapPath))
@@ -92,42 +88,6 @@ public static class CompanionImportedMapAssetService
             SplitWadReferences(
                 wadProperty);
 
-        List<string> existingProjectWads =
-            projectWadService
-                .GetProjectWadPaths(
-                    session)
-                .Select(
-                    Path.GetFullPath)
-                .ToList();
-
-        List<string> registeredWads =
-            registeredWadPaths
-                .Where(
-                    path =>
-                        !string.IsNullOrWhiteSpace(
-                            path))
-                .Select(
-                    path =>
-                    {
-                        try
-                        {
-                            return Path.GetFullPath(
-                                path);
-                        }
-                        catch
-                        {
-                            return string.Empty;
-                        }
-                    })
-                .Where(
-                    path =>
-                        path.Length > 0 &&
-                        File.Exists(
-                            path))
-                .Distinct(
-                    StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
         List<string> managedOrder =
             new();
 
@@ -140,63 +100,45 @@ public static class CompanionImportedMapAssetService
         int importedWadCount =
             0;
 
-        foreach (string reference in
-                 referencedWads)
+        foreach (string selectedWadPath in
+                 selectedWadPaths)
         {
-            WadResolution resolution =
-                ResolveReferencedWad(
-                    reference,
-                    fullMapPath,
-                    existingProjectWads,
-                    registeredWads);
-
-            if (resolution.ResolvedPath is null)
+            if (string.IsNullOrWhiteSpace(
+                    selectedWadPath))
             {
-                missingReferences.Add(
-                    resolution.Problem ??
-                    reference);
-
                 continue;
             }
 
             try
             {
-                CompanionProjectWadImportResult imported =
-                    projectWadService.ImportIntoProject(
-                        session,
-                        resolution.ResolvedPath);
+                string fullWadPath =
+                    Path.GetFullPath(
+                        selectedWadPath);
 
-                if (imported.CopiedIntoProject)
+                if (!File.Exists(
+                        fullWadPath))
                 {
-                    importedWadCount++;
+                    missingReferences.Add(
+                        fullWadPath);
+
+                    continue;
                 }
 
                 AddUnique(
                     managedOrder,
-                    Path.GetFullPath(
-                        imported.WadPath));
+                    fullWadPath);
             }
             catch (Exception exception)
                 when (exception is
                     IOException or
                     UnauthorizedAccessException or
-                    InvalidDataException)
+                    ArgumentException or
+                    NotSupportedException)
             {
                 invalidReferences.Add(
-                    $"{reference} -> {exception.Message}");
+                    $"{selectedWadPath} -> {exception.Message}");
             }
         }
-
-        foreach (string projectWad in
-                 projectWadService.GetProjectWadPaths(
-                     session))
-        {
-            AddUnique(
-                managedOrder,
-                Path.GetFullPath(
-                    projectWad));
-        }
-
         string normalizedText =
             RemoveStaleWorldspawnMetadata(
                 mapFile.Text,
