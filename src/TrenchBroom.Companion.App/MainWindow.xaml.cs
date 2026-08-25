@@ -14,6 +14,10 @@ public partial class MainWindow : Window
     private TrenchBroomInstallationInfo? _installation;
     private Button? _installationActionButton;
 
+    private readonly CompanionWadLibraryService
+        _wadLibraryService =
+            new();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -64,8 +68,9 @@ public partial class MainWindow : Window
                     _settings.TrenchBroomExecutablePath);
         }
 
-        HashSet<string> loadedPaths = new(
-            StringComparer.OrdinalIgnoreCase);
+        HashSet<string> loadedPaths =
+            new(
+                StringComparer.OrdinalIgnoreCase);
 
         foreach (string wadPath in
                  _settings.RegisteredWadPaths)
@@ -75,14 +80,17 @@ public partial class MainWindow : Window
             try
             {
                 normalizedPath =
-                    Path.GetFullPath(wadPath);
+                    Path.GetFullPath(
+                        wadPath);
             }
             catch
             {
-                normalizedPath = wadPath;
+                normalizedPath =
+                    wadPath;
             }
 
-            if (!loadedPaths.Add(normalizedPath))
+            if (!loadedPaths.Add(
+                    normalizedPath))
             {
                 continue;
             }
@@ -90,6 +98,22 @@ public partial class MainWindow : Window
             RegisteredWads.Add(
                 WadRegistrationService.Inspect(
                     normalizedPath));
+        }
+
+        if (CompanionManagedDataRootService
+            .TryGetConfiguredRoot(
+                _settings,
+                out string managedDataRoot))
+        {
+            bool changed =
+                SynchronizeRegisteredWadsWithLibrary(
+                    managedDataRoot,
+                    adoptExternalWads: true);
+
+            if (changed)
+            {
+                SaveSettings();
+            }
         }
     }
 
@@ -494,13 +518,183 @@ public partial class MainWindow : Window
         RefreshInterface();
     }
 
+    private bool TryEnsureWadLibraryRoot(
+        out string managedDataRoot)
+    {
+        if (CompanionManagedDataRootService
+            .TryGetConfiguredRoot(
+                _settings,
+                out managedDataRoot))
+        {
+            return true;
+        }
+
+        OpenFolderDialog dialog =
+            new()
+            {
+                Title =
+                    "Choose a drive for Companion assets and projects",
+
+                Multiselect =
+                    false
+            };
+
+        if (dialog.ShowDialog(
+                this) != true)
+        {
+            managedDataRoot =
+                string.Empty;
+
+            StatusText.Text =
+                "WAD import canceled because Companion storage has not been chosen yet.";
+
+            return false;
+        }
+
+        string selectedRoot =
+            CompanionManagedDataRootService
+                .GetDataRootForDrive(
+                    dialog.FolderName);
+
+        _settings.ManagedDataRootPath =
+            selectedRoot;
+
+        if (!CompanionManagedDataRootService
+                .TryGetConfiguredRoot(
+                    _settings,
+                    out managedDataRoot))
+        {
+            _settings.ManagedDataRootPath =
+                null;
+
+            throw new InvalidOperationException(
+                "Companion could not initialize managed asset storage on the selected drive.");
+        }
+
+        SaveSettings();
+
+        StatusText.Text =
+            $"Companion reusable assets will be stored under '{managedDataRoot}'.";
+
+        return true;
+    }
+
+    private bool SynchronizeRegisteredWadsWithLibrary(
+        string managedDataRoot,
+        bool adoptExternalWads)
+    {
+        HashSet<string> previousPaths =
+            RegisteredWads
+                .Select(
+                    item =>
+                        item.WadPath)
+                .ToHashSet(
+                    StringComparer.OrdinalIgnoreCase);
+
+        List<WadRegistrationResult> retainedExternal =
+            new();
+
+        foreach (WadRegistrationResult item in
+                 RegisteredWads.ToArray())
+        {
+            if (_wadLibraryService.IsLibraryWad(
+                    managedDataRoot,
+                    item.WadPath))
+            {
+                continue;
+            }
+
+            if (!adoptExternalWads ||
+                !File.Exists(
+                    item.WadPath) ||
+                !item.WadIsValid)
+            {
+                retainedExternal.Add(
+                    item);
+
+                continue;
+            }
+
+            try
+            {
+                _wadLibraryService.Import(
+                    managedDataRoot,
+                    item.WadPath);
+            }
+            catch
+            {
+                retainedExternal.Add(
+                    item);
+            }
+        }
+
+        RegisteredWads.Clear();
+
+        HashSet<string> loaded =
+            new(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (string libraryWadPath in
+                 _wadLibraryService.GetWadPaths(
+                     managedDataRoot))
+        {
+            if (!loaded.Add(
+                    libraryWadPath))
+            {
+                continue;
+            }
+
+            RegisteredWads.Add(
+                WadRegistrationService.Inspect(
+                    libraryWadPath));
+        }
+
+        foreach (WadRegistrationResult retained in
+                 retainedExternal)
+        {
+            string normalizedPath;
+
+            try
+            {
+                normalizedPath =
+                    Path.GetFullPath(
+                        retained.WadPath);
+            }
+            catch
+            {
+                normalizedPath =
+                    retained.WadPath;
+            }
+
+            if (!loaded.Add(
+                    normalizedPath))
+            {
+                continue;
+            }
+
+            RegisteredWads.Add(
+                retained);
+        }
+
+        HashSet<string> currentPaths =
+            RegisteredWads
+                .Select(
+                    item =>
+                        item.WadPath)
+                .ToHashSet(
+                    StringComparer.OrdinalIgnoreCase);
+
+        return !previousPaths.SetEquals(
+            currentPaths);
+    }
+
     private void AddWads_Click(
         object sender,
         RoutedEventArgs e)
     {
         OpenFileDialog dialog = new()
         {
-            Title = "Register WAD2 or WAD3 archives",
+            Title = "Import WAD2 or WAD3 archives into the Companion library",
             Filter =
                 "WAD archives|*.wad|" +
                 "All files|*.*",
@@ -547,7 +741,7 @@ public partial class MainWindow : Window
         if (e.Effects == DragDropEffects.Copy)
         {
             StatusText.Text =
-                "Release to register the dropped WAD files.";
+                "Release to import the dropped WAD files into the Companion library.";
         }
 
         e.Handled = true;
@@ -608,30 +802,38 @@ public partial class MainWindow : Window
         IEnumerable<string> inputPaths,
         string sourceDescription)
     {
-        HashSet<string> existingPaths =
-            RegisteredWads
-                .Select(item => item.WadPath)
-                .ToHashSet(
-                    StringComparer.OrdinalIgnoreCase);
+        if (!TryEnsureWadLibraryRoot(
+                out string managedDataRoot))
+        {
+            return;
+        }
 
-        bool addToCurrentProject =
-            _projectSession is not null;
+        SynchronizeRegisteredWadsWithLibrary(
+            managedDataRoot,
+            adoptExternalWads: true);
 
-        int addedCount = 0;
-        int duplicateCount = 0;
-        int unsupportedCount = 0;
+        int addedCount =
+            0;
+
+        int reusedCount =
+            0;
+
+        int unsupportedCount =
+            0;
 
         foreach (string candidatePath in
-                 ExpandWadPaths(inputPaths)
-                     .Distinct(
-                         StringComparer.OrdinalIgnoreCase))
+                 ExpandWadPaths(
+                     inputPaths)
+                 .Distinct(
+                     StringComparer.OrdinalIgnoreCase))
         {
             string fullPath;
 
             try
             {
                 fullPath =
-                    Path.GetFullPath(candidatePath);
+                    Path.GetFullPath(
+                        candidatePath);
             }
             catch
             {
@@ -639,9 +841,11 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            if (!File.Exists(fullPath) ||
+            if (!File.Exists(
+                    fullPath) ||
                 !string.Equals(
-                    Path.GetExtension(fullPath),
+                    Path.GetExtension(
+                        fullPath),
                     ".wad",
                     StringComparison.OrdinalIgnoreCase))
             {
@@ -649,72 +853,63 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            string registrationPath =
-                fullPath;
-
-            if (addToCurrentProject)
+            try
             {
-                try
+                CompanionWadLibraryImportResult result =
+                    _wadLibraryService.Import(
+                        managedDataRoot,
+                        fullPath);
+
+                if (result.CopiedIntoLibrary)
                 {
-                    registrationPath =
-                        _projectWadService
-                            .ImportIntoProject(
-                                _projectSession!,
-                                fullPath)
-                            .WadPath;
+                    addedCount++;
                 }
-                catch
+                else
                 {
-                    unsupportedCount++;
-                    continue;
+                    reusedCount++;
                 }
             }
-
-            if (!existingPaths.Add(
-                    registrationPath))
+            catch
             {
-                duplicateCount++;
-                continue;
+                unsupportedCount++;
             }
-
-            RegisteredWads.Add(
-                WadRegistrationService.Inspect(
-                    registrationPath));
-
-            addedCount++;
         }
 
-        if (addedCount > 0)
-        {
-            SaveSettings();
-        }
+        SynchronizeRegisteredWadsWithLibrary(
+            managedDataRoot,
+            adoptExternalWads: false);
 
+        SaveSettings();
         RefreshInterface();
 
-        List<string> statusParts = new();
+        List<string> statusParts =
+            new();
 
         statusParts.Add(
-            addToCurrentProject
-                ? $"{addedCount:N0} WAD archive(s) added to the current project by {sourceDescription}"
-                : $"{addedCount:N0} WAD archive(s) registered by {sourceDescription}");
+            addedCount ==
+                1
+                ? "1 WAD imported into the Companion library"
+                : $"{addedCount:N0} WADs imported into the Companion library");
 
-        if (duplicateCount > 0)
+        if (reusedCount >
+            0)
         {
             statusParts.Add(
-                $"{duplicateCount:N0} duplicate(s) skipped");
+                $"{reusedCount:N0} existing library item(s) reused");
         }
 
-        if (unsupportedCount > 0)
+        if (unsupportedCount >
+            0)
         {
             statusParts.Add(
-                $"{unsupportedCount:N0} unsupported or conflicting item(s) skipped");
+                $"{unsupportedCount:N0} unsupported item(s) skipped");
         }
 
         StatusText.Text =
             string.Join(
                 "; ",
                 statusParts) +
-            ".";
+            $" ({sourceDescription}).";
     }
 
     private static IEnumerable<string> ExpandWadPaths(
@@ -796,19 +991,41 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        if (RegisteredWads.Count == 0)
+        if (CompanionManagedDataRootService
+            .TryGetConfiguredRoot(
+                _settings,
+                out string managedDataRoot))
+        {
+            SynchronizeRegisteredWadsWithLibrary(
+                managedDataRoot,
+                adoptExternalWads: true);
+
+            SaveSettings();
+            RefreshInterface();
+
+            StatusText.Text =
+                $"{RegisteredWads.Count:N0} WAD library item(s) refreshed.";
+
+            return;
+        }
+
+        if (RegisteredWads.Count ==
+            0)
         {
             return;
         }
 
         string[] paths =
             RegisteredWads
-                .Select(item => item.WadPath)
+                .Select(
+                    item =>
+                        item.WadPath)
                 .ToArray();
 
         RegisteredWads.Clear();
 
-        foreach (string path in paths)
+        foreach (string path in
+                 paths)
         {
             RegisteredWads.Add(
                 WadRegistrationService.Inspect(
@@ -819,7 +1036,7 @@ public partial class MainWindow : Window
         RefreshInterface();
 
         StatusText.Text =
-            $"{RegisteredWads.Count:N0} registration(s) revalidated.";
+            $"{RegisteredWads.Count:N0} legacy WAD registration(s) revalidated.";
     }
 
     private void RemoveSelected_Click(
@@ -832,21 +1049,94 @@ public partial class MainWindow : Window
                 .Cast<WadRegistrationResult>()
                 .ToArray();
 
-        if (selected.Length == 0)
+        if (selected.Length ==
+            0)
         {
             return;
         }
 
-        foreach (WadRegistrationResult item in selected)
+        bool hasManagedRoot =
+            CompanionManagedDataRootService
+                .TryGetConfiguredRoot(
+                    _settings,
+                    out string managedDataRoot);
+
+        int managedDeleteCount =
+            hasManagedRoot
+                ? selected.Count(
+                    item =>
+                        _wadLibraryService.IsLibraryWad(
+                            managedDataRoot,
+                            item.WadPath))
+                : 0;
+
+        if (managedDeleteCount >
+            0)
         {
-            RegisteredWads.Remove(item);
+            MessageBoxResult confirmation =
+                MessageBox.Show(
+                    this,
+                    managedDeleteCount ==
+                        1
+                        ? "Remove this WAD from the Companion library?" +
+                          Environment.NewLine +
+                          Environment.NewLine +
+                          "The managed library copy will be deleted. The original file it was imported from will not be changed."
+                        : $"Remove {managedDeleteCount:N0} WADs from the Companion library?" +
+                          Environment.NewLine +
+                          Environment.NewLine +
+                          "The managed library copies will be deleted. Original imported files will not be changed.",
+                    "Remove WAD from Library",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+            if (confirmation !=
+                MessageBoxResult.Yes)
+            {
+                return;
+            }
+        }
+
+        int deletedCount =
+            0;
+
+        foreach (WadRegistrationResult item in
+                 selected)
+        {
+            if (hasManagedRoot &&
+                _wadLibraryService.IsLibraryWad(
+                    managedDataRoot,
+                    item.WadPath))
+            {
+                _wadLibraryService.Remove(
+                    managedDataRoot,
+                    item.WadPath);
+
+                deletedCount++;
+            }
+
+            RegisteredWads.Remove(
+                item);
+        }
+
+        if (hasManagedRoot)
+        {
+            SynchronizeRegisteredWadsWithLibrary(
+                managedDataRoot,
+                adoptExternalWads: false);
         }
 
         SaveSettings();
         RefreshInterface();
 
         StatusText.Text =
-            $"{selected.Length:N0} registration(s) removed.";
+            deletedCount ==
+                1
+                ? "1 WAD removed from the Companion library."
+                : deletedCount >
+                    1
+                    ? $"{deletedCount:N0} WADs removed from the Companion library."
+                    : $"{selected.Length:N0} legacy WAD registration(s) removed. External files were not deleted.";
     }
 
     private void OpenSelectedFolder_Click(
@@ -1115,8 +1405,8 @@ public partial class MainWindow : Window
 
         RegistrationCountText.Text =
             count == 1
-                ? "1 registered WAD"
-                : $"{count:N0} registered WADs";
+                ? "1 library WAD"
+                : $"{count:N0} library WADs";
 
         if (count > 0)
         {

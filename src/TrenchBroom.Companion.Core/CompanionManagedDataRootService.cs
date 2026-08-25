@@ -19,6 +19,12 @@ public static class CompanionManagedDataRootService
     public const string GameResourcesDirectoryName =
         "GameResources";
 
+    public const string AssetsDirectoryName =
+        "Assets";
+
+    public const string WadLibraryDirectoryName =
+        "Wads";
+
     public static bool TryInitializeFromExistingWorkspace(
         CompanionSettings settings)
     {
@@ -245,6 +251,23 @@ public static class CompanionManagedDataRootService
             CompilersDirectoryName);
     }
 
+    public static string GetAssetsDirectory(
+        string managedDataRoot)
+    {
+        return Path.Combine(
+            Path.GetFullPath(
+                managedDataRoot),
+            AssetsDirectoryName);
+    }
+
+    public static string GetWadLibraryDirectory(
+        string managedDataRoot)
+    {
+        return Path.Combine(
+            GetAssetsDirectory(
+                managedDataRoot),
+            WadLibraryDirectoryName);
+    }
     public static string GetDuskAuthoringDirectory(
         string managedDataRoot)
     {
@@ -443,5 +466,9 @@ public static class CompanionManagedDataRootService
             Path.Combine(
                 root,
                 GameResourcesDirectoryName));
+
+        Directory.CreateDirectory(
+            GetWadLibraryDirectory(
+                root));
     }
 }
