@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -18,6 +20,8 @@ public partial class MainWindow : Window
         _wadLibraryService =
             new();
 
+    private ICollectionView? _wadLibraryView;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -25,7 +29,17 @@ public partial class MainWindow : Window
         RegisteredWads =
             new ObservableCollection<WadRegistrationResult>();
 
+        _wadLibraryView =
+            CollectionViewSource.GetDefaultView(
+                RegisteredWads);
+
+        _wadLibraryView.Filter =
+            FilterWadLibraryItem;
+
         DataContext = this;
+
+        WadFormatFilterComboBox.SelectedIndex =
+            0;
         ConfigureTrenchBroomPresentation();
 
         try
@@ -57,6 +71,9 @@ public partial class MainWindow : Window
 
     public ObservableCollection<WadRegistrationResult>
         RegisteredWads { get; }
+
+    public ICollectionView? WadLibraryView =>
+        _wadLibraryView;
 
     private void LoadSavedState()
     {
@@ -987,6 +1004,132 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool FilterWadLibraryItem(
+        object item)
+    {
+        if (item is not WadRegistrationResult wad)
+        {
+            return false;
+        }
+
+        string search =
+            WadSearchTextBox.Text.Trim();
+
+        string selectedFormat =
+            (WadFormatFilterComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ??
+            "All";
+
+        bool formatMatches =
+            string.Equals(selectedFormat,"All",StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(wad.WadFormat,selectedFormat,StringComparison.OrdinalIgnoreCase);
+
+        if (!formatMatches)
+        {
+            return false;
+        }
+
+        if (search.Length == 0)
+        {
+            return true;
+        }
+
+        return ContainsSearch(wad.WadFileName,search) ||
+            ContainsSearch(wad.WadPath,search) ||
+            ContainsSearch(wad.WadFormat,search) ||
+            ContainsSearch(wad.ManifestFileName,search) ||
+            ContainsSearch(wad.Validation,search);
+    }
+
+    private static bool ContainsSearch(
+        string? value,
+        string search)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+            value.Contains(search,StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void WadSearchTextBox_TextChanged(
+        object sender,
+        TextChangedEventArgs e)
+    {
+        RefreshWadLibraryBrowser();
+    }
+
+    private void WadFormatFilterComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        RefreshWadLibraryBrowser();
+    }
+
+    private void RefreshWadLibraryBrowser()
+    {
+        if (_wadLibraryView is null)
+        {
+            return;
+        }
+
+        _wadLibraryView.Refresh();
+
+        int totalCount = RegisteredWads.Count;
+        int visibleCount = _wadLibraryView.Cast<object>().Count();
+
+        WadVisibleCountText.Text =
+            totalCount == visibleCount
+                ? $"{visibleCount:N0} shown"
+                : $"{visibleCount:N0} of {totalCount:N0} shown";
+
+        if (totalCount == 0)
+        {
+            EmptyRegistrationTitleText.Text = "No WADs in the library yet";
+            EmptyRegistrationDetailText.Text = "Drag WAD files or folders here, or use Import WADs.";
+            EmptyRegistrationPanel.Visibility = Visibility.Visible;
+        }
+        else if (visibleCount == 0)
+        {
+            EmptyRegistrationTitleText.Text = "No WADs match your filters";
+            EmptyRegistrationDetailText.Text = "Try a different search term or WAD format.";
+            EmptyRegistrationPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            EmptyRegistrationPanel.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void RefreshSelectedWadDetails()
+    {
+        WadRegistrationResult? selected =
+            RegistrationGrid.SelectedItem as WadRegistrationResult;
+
+        bool hasSelection = selected is not null;
+
+        WadDetailsEmptyPanel.Visibility =
+            hasSelection ? Visibility.Collapsed : Visibility.Visible;
+
+        WadDetailsContentPanel.Visibility =
+            hasSelection ? Visibility.Visible : Visibility.Collapsed;
+
+        if (selected is null)
+        {
+            WadDetailsTitleText.Text = "Select a WAD";
+            return;
+        }
+
+        WadDetailsTitleText.Text = selected.WadFileName;
+        WadDetailsFormatText.Text = selected.WadFormat;
+        WadDetailsTextureCountText.Text = selected.TextureCountText;
+
+        WadDetailsAliasText.Text =
+            selected.ManifestExists
+                ? selected.ManifestIsValid
+                    ? $"{selected.AliasCountText} alias(es) - verified manifest"
+                    : $"{selected.AliasCountText} alias(es) - manifest needs attention"
+                : "No WadForge alias manifest";
+
+        WadDetailsValidationText.Text = selected.Validation;
+        WadDetailsPathText.Text = selected.WadPath;
+    }
     private void RefreshRegistrations_Click(
         object sender,
         RoutedEventArgs e)
@@ -1189,8 +1332,9 @@ public partial class MainWindow : Window
 
         OpenFolderButton.IsEnabled =
             selectedCount == 1;
-    }
 
+        RefreshSelectedWadDetails();
+    }
     private void LaunchTrenchBroom_Click(
         object sender,
         RoutedEventArgs e)
@@ -1420,10 +1564,8 @@ public partial class MainWindow : Window
             }
         }
 
-        EmptyRegistrationPanel.Visibility =
-            count == 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+        RefreshWadLibraryBrowser();
+        RefreshSelectedWadDetails();
 
         RefreshButton.IsEnabled =
             count > 0;
