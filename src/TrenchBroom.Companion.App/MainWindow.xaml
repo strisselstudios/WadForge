@@ -927,7 +927,9 @@
                                FontSize="14"
                                Text="Browse and manage reusable texture archives shared across Companion projects." />
                 </StackPanel>
-                <Border Grid.Row="2" Padding="18" Style="{StaticResource CardStyle}">
+                <Border Grid.Row="2"
+                        Padding="18"
+                        Style="{StaticResource CardStyle}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -940,19 +942,45 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="WAD Library" />
+                                <TextBlock FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Text="WAD Library" />
                                 <TextBlock Margin="0,4,0,0"
                                            Foreground="{StaticResource SecondaryTextBrush}"
                                            TextWrapping="Wrap"
-                                           Text="Import WADs once into the central library, then find and inspect them here." />
+                                           Text="Import WADs once, then open any archive to browse its textures visually." />
                             </StackPanel>
                             <WrapPanel Grid.Column="1"
                                        Margin="20,0,-10,-10"
                                        VerticalAlignment="Center">
-                                <Button Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,10" Click="AddWads_Click" Content="Import WADs" />
-                                <Button x:Name="RefreshButton" Style="{StaticResource DarkButtonStyle}" Margin="0,0,10,10" IsEnabled="False" Click="RefreshRegistrations_Click" Content="Refresh" />
-                                <Button x:Name="OpenFolderButton" Style="{StaticResource DarkButtonStyle}" Margin="0,0,10,10" IsEnabled="False" Click="OpenSelectedFolder_Click" Content="Open Folder" />
-                                <Button x:Name="RemoveButton" Style="{StaticResource DarkButtonStyle}" Margin="0,0,10,10" IsEnabled="False" Click="RemoveSelected_Click" Content="Remove from Library" />
+                                <Button Style="{StaticResource PrimaryButtonStyle}"
+                                        Margin="0,0,10,10"
+                                        Click="AddWads_Click"
+                                        Content="Import WADs" />
+                                <Button x:Name="BrowseWadButton"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Margin="0,0,10,10"
+                                        IsEnabled="False"
+                                        Click="BrowseSelectedWad_Click"
+                                        Content="Browse WAD" />
+                                <Button x:Name="RefreshButton"
+                                        Style="{StaticResource DarkButtonStyle}"
+                                        Margin="0,0,10,10"
+                                        IsEnabled="False"
+                                        Click="RefreshRegistrations_Click"
+                                        Content="Refresh" />
+                                <Button x:Name="OpenFolderButton"
+                                        Style="{StaticResource DarkButtonStyle}"
+                                        Margin="0,0,10,10"
+                                        IsEnabled="False"
+                                        Click="OpenSelectedFolder_Click"
+                                        Content="Open Folder" />
+                                <Button x:Name="RemoveButton"
+                                        Style="{StaticResource DarkButtonStyle}"
+                                        Margin="0,0,10,10"
+                                        IsEnabled="False"
+                                        Click="RemoveSelected_Click"
+                                        Content="Remove from Library" />
                             </WrapPanel>
                         </Grid>
                         <Grid Grid.Row="2">
@@ -985,103 +1013,57 @@
                         </Grid>
                     </Grid>
                 </Border>
-                <Grid Grid.Row="4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
-                        <ColumnDefinition Width="310" />
-                    </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0"
-                            Background="{StaticResource PanelBackgroundBrush}"
-                            BorderBrush="{StaticResource PanelBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="9">
-                        <Grid>
-                            <DataGrid x:Name="RegistrationGrid"
-                                      IsReadOnly="True"
-                                      ItemsSource="{Binding WadLibraryView}"
-                                      VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Auto"
-                                      EnableRowVirtualization="True"
-                                      EnableColumnVirtualization="True"
-                                      VirtualizingPanel.IsVirtualizing="True"
-                                      VirtualizingPanel.VirtualizationMode="Recycling"
-                                      SelectionChanged="RegistrationGrid_SelectionChanged">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Width="*" MinWidth="180" Header="WAD" Binding="{Binding WadFileName}" />
-                                    <DataGridTextColumn Width="70" Header="Format" Binding="{Binding WadFormat}" />
-                                    <DataGridTextColumn Width="82" Header="Textures" Binding="{Binding TextureCountText}" />
-                                    <DataGridTextColumn Width="72" Header="Aliases" Binding="{Binding AliasCountText}" />
-                                    <DataGridTextColumn Width="180" Header="Status" Binding="{Binding Validation}" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                            <Border x:Name="EmptyRegistrationPanel"
-                                    Margin="24"
-                                    Background="#121922"
-                                    BorderBrush="#334252"
-                                    BorderThickness="1"
-                                    CornerRadius="7"
-                                    IsHitTestVisible="False">
-                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <TextBlock x:Name="EmptyRegistrationTitleText"
-                                               HorizontalAlignment="Center"
-                                               FontSize="19"
-                                               FontWeight="SemiBold"
-                                               Text="No WADs in the library yet" />
-                                    <TextBlock x:Name="EmptyRegistrationDetailText"
-                                               Margin="0,8,0,0"
-                                               MaxWidth="480"
-                                               HorizontalAlignment="Center"
-                                               Foreground="{StaticResource SecondaryTextBrush}"
-                                               TextAlignment="Center"
-                                               TextWrapping="Wrap"
-                                               Text="Drag WAD files or folders here, or use Import WADs." />
-                                </StackPanel>
-                            </Border>
-                        </Grid>
-                    </Border>
-                    <Border Grid.Column="2" Style="{StaticResource CardStyle}">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="12" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel>
-                                <TextBlock Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="Bold" Text="WAD DETAILS" />
-                                <TextBlock x:Name="WadDetailsTitleText"
-                                           Margin="0,5,0,0"
+                <Border Grid.Row="4"
+                        Background="{StaticResource PanelBackgroundBrush}"
+                        BorderBrush="{StaticResource PanelBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="9">
+                    <Grid>
+                        <DataGrid x:Name="RegistrationGrid"
+                                  IsReadOnly="True"
+                                  ItemsSource="{Binding WadLibraryView}"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  SelectionChanged="RegistrationGrid_SelectionChanged"
+                                  MouseDoubleClick="RegistrationGrid_MouseDoubleClick">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Width="*" MinWidth="220" Header="WAD" Binding="{Binding WadFileName}" />
+                                <DataGridTextColumn Width="80" Header="Format" Binding="{Binding WadFormat}" />
+                                <DataGridTextColumn Width="95" Header="Textures" Binding="{Binding TextureCountText}" />
+                                <DataGridTextColumn Width="80" Header="Aliases" Binding="{Binding AliasCountText}" />
+                                <DataGridTextColumn Width="250" Header="Status" Binding="{Binding Validation}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Border x:Name="EmptyRegistrationPanel"
+                                Margin="24"
+                                Background="#121922"
+                                BorderBrush="#334252"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                IsHitTestVisible="False">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <TextBlock x:Name="EmptyRegistrationTitleText"
+                                           HorizontalAlignment="Center"
                                            FontSize="19"
                                            FontWeight="SemiBold"
-                                           Text="Select a WAD" />
-                            </StackPanel>
-                            <StackPanel x:Name="WadDetailsEmptyPanel"
-                                        Grid.Row="2"
-                                        VerticalAlignment="Center">
-                                <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                           Text="No WADs in the library yet" />
+                                <TextBlock x:Name="EmptyRegistrationDetailText"
+                                           Margin="0,8,0,0"
+                                           MaxWidth="480"
+                                           HorizontalAlignment="Center"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           TextAlignment="Center"
                                            TextWrapping="Wrap"
-                                           Text="Choose a WAD from the library to see its format, texture count, alias information, validation status, and storage path." />
+                                           Text="Drag WAD files or folders here, or use Import WADs." />
                             </StackPanel>
-                            <ScrollViewer x:Name="WadDetailsContentPanel"
-                                          Grid.Row="2"
-                                          Visibility="Collapsed"
-                                          VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="Bold" Text="FORMAT" />
-                                    <TextBlock x:Name="WadDetailsFormatText" Margin="0,3,0,13" FontWeight="SemiBold" Text="-" />
-                                    <TextBlock Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="Bold" Text="TEXTURES" />
-                                    <TextBlock x:Name="WadDetailsTextureCountText" Margin="0,3,0,13" FontWeight="SemiBold" Text="-" />
-                                    <TextBlock Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="Bold" Text="ALIASES" />
-                                    <TextBlock x:Name="WadDetailsAliasText" Margin="0,3,0,13" TextWrapping="Wrap" Text="-" />
-                                    <TextBlock Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="Bold" Text="VALIDATION" />
-                                    <TextBlock x:Name="WadDetailsValidationText" Margin="0,3,0,13" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" Text="-" />
-                                    <TextBlock Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="Bold" Text="LIBRARY PATH" />
-                                    <TextBlock x:Name="WadDetailsPathText" Margin="0,3,0,0" Foreground="{StaticResource SecondaryTextBrush}" FontSize="11" TextWrapping="Wrap" Text="-" />
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
-                    </Border>
-                </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
             </Grid>
             <!-- Tools -->
             <ScrollViewer x:Name="ToolsView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">

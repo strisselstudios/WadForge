@@ -20,6 +20,10 @@ public partial class MainWindow : Window
         _wadLibraryService =
             new();
 
+    private readonly CompanionPaletteLibraryService
+        _paletteLibraryService =
+            new();
+
     private ICollectionView? _wadLibraryView;
 
     public MainWindow()
@@ -876,6 +880,10 @@ public partial class MainWindow : Window
                     _wadLibraryService.Import(
                         managedDataRoot,
                         fullPath);
+                _paletteLibraryService.ImportEvidenceForSourceWad(
+                    managedDataRoot,
+                    fullPath);
+
 
                 if (result.CopiedIntoLibrary)
                 {
@@ -1097,39 +1105,127 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RefreshSelectedWadDetails()
+
+    private void BrowseSelectedWad_Click(
+        object sender,
+        RoutedEventArgs e)
     {
-        WadRegistrationResult? selected =
-            RegistrationGrid.SelectedItem as WadRegistrationResult;
-
-        bool hasSelection = selected is not null;
-
-        WadDetailsEmptyPanel.Visibility =
-            hasSelection ? Visibility.Collapsed : Visibility.Visible;
-
-        WadDetailsContentPanel.Visibility =
-            hasSelection ? Visibility.Visible : Visibility.Collapsed;
-
-        if (selected is null)
+        if (RegistrationGrid.SelectedItem is not
+            WadRegistrationResult selected)
         {
-            WadDetailsTitleText.Text = "Select a WAD";
             return;
         }
 
-        WadDetailsTitleText.Text = selected.WadFileName;
-        WadDetailsFormatText.Text = selected.WadFormat;
-        WadDetailsTextureCountText.Text = selected.TextureCountText;
+        if (!TryEnsureWadLibraryRoot(
+                out string managedDataRoot))
+        {
+            return;
+        }
 
-        WadDetailsAliasText.Text =
-            selected.ManifestExists
-                ? selected.ManifestIsValid
-                    ? $"{selected.AliasCountText} alias(es) - verified manifest"
-                    : $"{selected.AliasCountText} alias(es) - manifest needs attention"
-                : "No WadForge alias manifest";
+        try
+        {
+            string? activeGameId =
+                _projectSession?.Project.GameId;
 
-        WadDetailsValidationText.Text = selected.Validation;
-        WadDetailsPathText.Text = selected.WadPath;
+            string? duskPalettePath =
+                TryGetActiveDuskPalettePath();
+
+            IReadOnlyList<string> quakeInstallations =
+                _gameInstallationLocator.FindInstallations(
+                    CompanionGameProfiles.Quake);
+
+            CompanionPaletteResolution paletteResolution =
+                _paletteLibraryService.PrepareForWad(
+                    managedDataRoot,
+                    selected.WadPath,
+                    selected.ManifestPath,
+                    activeGameId,
+                    _gameInstallationDirectory,
+                    duskPalettePath,
+                    quakeInstallations);
+
+            CompanionWadBrowserWindow dialog =
+                new(
+                    selected,
+                    managedDataRoot,
+                    paletteResolution)
+                {
+                    Owner =
+                        this
+                };
+
+            dialog.ShowDialog();
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                exception.Message,
+                "WAD Browser",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
+
+    private void RegistrationGrid_MouseDoubleClick(
+        object sender,
+        System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (RegistrationGrid.SelectedItem is not
+            WadRegistrationResult)
+        {
+            return;
+        }
+
+        BrowseSelectedWad_Click(
+            sender,
+            e);
+    }
+
+    private string? TryGetActiveDuskPalettePath()
+    {
+        if (_projectSession is null ||
+            !string.Equals(
+                _projectSession.Project.GameId,
+                CompanionGameProfiles.Dusk.Id,
+                StringComparison.OrdinalIgnoreCase) ||
+            _installation is null ||
+            !_installation.IsValid)
+        {
+            return null;
+        }
+
+        try
+        {
+            CompanionDuskAuthoringResourceStatus status =
+                CompanionDuskAuthoringResourceService.GetStatus(
+                    _installation.ExecutablePath);
+
+            if (!status.IsReady)
+            {
+                return null;
+            }
+
+            string candidate =
+                Path.Combine(
+                    status.ManagedId1Directory,
+                    "gfx",
+                    "palette.lmp");
+
+            return File.Exists(
+                    candidate) &&
+                new FileInfo(
+                    candidate).Length ==
+                    768
+                ? candidate
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private void RefreshRegistrations_Click(
         object sender,
         RoutedEventArgs e)
@@ -1333,7 +1429,8 @@ public partial class MainWindow : Window
         OpenFolderButton.IsEnabled =
             selectedCount == 1;
 
-        RefreshSelectedWadDetails();
+        BrowseWadButton.IsEnabled =
+            selectedCount == 1;
     }
     private void LaunchTrenchBroom_Click(
         object sender,
@@ -1565,7 +1662,6 @@ public partial class MainWindow : Window
         }
 
         RefreshWadLibraryBrowser();
-        RefreshSelectedWadDetails();
 
         RefreshButton.IsEnabled =
             count > 0;

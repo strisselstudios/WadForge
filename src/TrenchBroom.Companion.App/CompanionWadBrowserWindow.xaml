@@ -1,0 +1,438 @@
+<Window x:Class="TrenchBroom.Companion.App.CompanionWadBrowserWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WAD Browser"
+        Width="1180"
+        Height="760"
+        MinWidth="980"
+        MinHeight="640"
+        WindowStartupLocation="CenterOwner"
+        Background="#0E1218"
+        Foreground="#FFFFFF"
+        Loaded="Window_Loaded">
+    <Window.Resources>
+        <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#171E27" />
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#2B3745" />
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#AEB9C7" />
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#748193" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#5EA2FF" />
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Background" Value="#111820" />
+            <Setter Property="BorderBrush" Value="#364455" />
+            <Setter Property="CaretBrush" Value="#FFFFFF" />
+            <Setter Property="SelectionBrush" Value="#315F94" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+
+        <Style x:Key="BrowserButtonStyle"
+               TargetType="Button">
+            <Setter Property="Foreground" Value="#F4F7FB" />
+            <Setter Property="Background" Value="#26313E" />
+            <Setter Property="BorderBrush" Value="#3A4859" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="13,7" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+
+        <Style x:Key="PrimaryBrowserButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource BrowserButtonStyle}">
+            <Setter Property="Background" Value="#2768AE" />
+            <Setter Property="BorderBrush" Value="#5EA2FF" />
+        </Style>
+
+        <Style x:Key="TextureRowItemStyle"
+               TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel>
+                <TextBlock x:Name="WadNameText"
+                           FontSize="26"
+                           FontWeight="Bold"
+                           Text="WAD Browser" />
+                <TextBlock x:Name="WadSummaryText"
+                           Margin="0,5,0,0"
+                           Foreground="{StaticResource SecondaryTextBrush}"
+                           FontSize="13"
+                           Text="Loading WAD details..." />
+            </StackPanel>
+
+            <Button Grid.Column="1"
+                    Width="90"
+                    VerticalAlignment="Top"
+                    Style="{StaticResource BrowserButtonStyle}"
+                    IsCancel="True"
+                    Content="Close" />
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="340" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Padding="16"
+                    Background="{StaticResource PanelBackgroundBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="9">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="10" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="10" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="18" />
+                            <ColumnDefinition Width="190" />
+                            <ColumnDefinition Width="18" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="TextureSearchTextBox"
+                                 Height="38"
+                                 VerticalContentAlignment="Center"
+                                 TextChanged="TextureSearchTextBox_TextChanged"
+                                 ToolTip="Search full alias names or stored WAD names" />
+
+                        <StackPanel Grid.Column="2"
+                                    VerticalAlignment="Center">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Foreground="{StaticResource MutedTextBrush}"
+                                           FontSize="10"
+                                           FontWeight="Bold"
+                                           Text="THUMBNAIL SIZE" />
+
+                                <TextBlock x:Name="ThumbnailScaleValueText"
+                                           Grid.Column="1"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           FontSize="10"
+                                           Text="115 px" />
+                            </Grid>
+
+                            <Slider x:Name="ThumbnailScaleSlider"
+                                    Margin="0,3,0,0"
+                                    Minimum="90"
+                                    Maximum="180"
+                                    Value="115"
+                                    TickFrequency="5"
+                                    IsSnapToTickEnabled="True"
+                                    ValueChanged="ThumbnailScaleSlider_ValueChanged" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="TextureCountText"
+                                   Grid.Column="4"
+                                   Margin="0,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="12"
+                                   Text="0 textures" />
+                    </Grid>
+
+                    <ListBox x:Name="TextureRowsListBox"
+                             Grid.Row="2"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             ItemContainerStyle="{StaticResource TextureRowItemStyle}"
+                             ScrollViewer.CanContentScroll="True"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             SizeChanged="TextureRowsListBox_SizeChanged">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <ItemsControl ItemsSource="{Binding Tiles}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Width="{Binding TileWidth}"
+                                                    MinHeight="{Binding TileMinHeight}"
+                                                    Margin="5"
+                                                    Padding="7"
+                                                    Foreground="#F4F7FB"
+                                                    Background="#121922"
+                                                    BorderBrush="#334252"
+                                                    BorderThickness="1"
+                                                    Cursor="Hand"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    VerticalContentAlignment="Stretch"
+                                                    Loaded="TextureTile_Loaded"
+                                                    Click="TextureTile_Click"
+                                                    Tag="{Binding}">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="{Binding ThumbnailHeight}" />
+                                                        <RowDefinition Height="Auto" />
+                                                    </Grid.RowDefinitions>
+
+                                                    <Border Background="#0A0E13"
+                                                            BorderBrush="#273442"
+                                                            BorderThickness="1">
+                                                        <Grid>
+                                                            <Image Source="{Binding Thumbnail}"
+                                                                   Stretch="Uniform"
+                                                                   SnapsToDevicePixels="True"
+                                                                   RenderOptions.BitmapScalingMode="NearestNeighbor" />
+
+                                                            <TextBlock Margin="8"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"
+                                                                       Foreground="#748193"
+                                                                       FontSize="10"
+                                                                       Text="{Binding LoadingText}"
+                                                                       TextAlignment="Center"
+                                                                       TextWrapping="Wrap" />
+                                                        </Grid>
+                                                    </Border>
+
+                                                    <StackPanel Grid.Row="1"
+                                                                Margin="2,8,2,2">
+                                                        <TextBlock Foreground="#F4F7FB"
+                                                                   FontSize="11"
+                                                                   FontWeight="SemiBold"
+                                                                   Text="{Binding DisplayName}"
+                                                                   TextAlignment="Center"
+                                                                   TextWrapping="Wrap"
+                                                                   ToolTip="{Binding DisplayName}" />
+
+                                                        <TextBlock Margin="0,4,0,0"
+                                                                   Foreground="#93A3B6"
+                                                                   FontSize="9"
+                                                                   Text="{Binding StoredNameLine}"
+                                                                   TextAlignment="Center"
+                                                                   TextWrapping="Wrap"
+                                                                   ToolTip="{Binding StoredNameLine}" />
+
+                                                        <TextBlock Margin="0,5,0,0"
+                                                                   Foreground="#AEB9C7"
+                                                                   FontSize="10"
+                                                                   FontWeight="SemiBold"
+                                                                   Text="{Binding Texture.DimensionsText}"
+                                                                   TextAlignment="Center" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <TextBlock x:Name="GridStatusText"
+                               Grid.Row="4"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Text="Select a WAD to browse textures." />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2"
+                    Padding="18"
+                    Background="{StaticResource PanelBackgroundBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="9">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Foreground="{StaticResource AccentBrush}"
+                                   FontSize="11"
+                                   FontWeight="Bold"
+                                   Text="TEXTURE PREVIEW" />
+
+                        <TextBlock x:Name="PreviewNameText"
+                                   Margin="0,6,0,0"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap"
+                                   Text="Select a texture" />
+
+                        <Border Margin="0,14,0,0"
+                                Height="300"
+                                Background="#090D12"
+                                BorderBrush="#334252"
+                                BorderThickness="1"
+                                CornerRadius="6">
+                            <Grid Margin="8">
+                                <Image x:Name="PreviewImage"
+                                       Stretch="Uniform"
+                                       SnapsToDevicePixels="True"
+                                       RenderOptions.BitmapScalingMode="NearestNeighbor" />
+
+                                <TextBlock x:Name="PreviewPlaceholderText"
+                                           Margin="12"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           Text="Click a texture tile to preview it." />
+                            </Grid>
+                        </Border>
+
+                        <TextBlock x:Name="PreviewStoredNameText"
+                                   Margin="0,9,0,0"
+                                   Foreground="#93A3B6"
+                                   FontSize="11"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock x:Name="PreviewDetailText"
+                                   Margin="0,5,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Text="Dimensions and palette source appear here." />
+
+                        <Border Margin="0,18,0,16"
+                                BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="0,1,0,0" />
+
+                        <TextBlock Foreground="{StaticResource AccentBrush}"
+                                   FontSize="11"
+                                   FontWeight="Bold"
+                                   Text="WAD DETAILS" />
+
+                        <TextBlock x:Name="WadMetadataText"
+                                   Margin="0,7,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap" />
+
+                        <StackPanel x:Name="Wad2PalettePanel"
+                                    Margin="0,18,0,0"
+                                    Visibility="Collapsed">
+                            <TextBlock Foreground="{StaticResource AccentBrush}"
+                                       FontSize="11"
+                                       FontWeight="Bold"
+                                       Text="WAD2 PREVIEW PALETTE" />
+
+                            <TextBlock x:Name="PaletteSourceText"
+                                       Margin="0,6,0,0"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+
+                            <TextBlock Margin="0,7,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Text="WAD2 stores indexed pixels without RGB colors. Companion automatically uses the strongest available palette evidence and only falls back to a neutral preview when no reliable palette can be found." />
+
+
+                            <TextBlock Margin="0,12,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       Text="PALETTE LIBRARY" />
+
+                            <ComboBox x:Name="PaletteComboBox"
+                                      Margin="0,6,0,0"
+                                      Height="36"
+                                      DisplayMemberPath="DisplayText"
+                                      SelectionChanged="PaletteComboBox_SelectionChanged" />
+
+                            <TextBlock x:Name="PaletteLibraryPathText"
+                                       Margin="0,5,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="9"
+                                       TextWrapping="Wrap" />
+
+                            <WrapPanel Margin="0,9,0,0">
+                                <Button Margin="0,0,8,8"
+                                        Style="{StaticResource PrimaryBrowserButtonStyle}"
+                                        Click="ImportPalette_Click"
+                                        Content="Import Palette..." />
+
+                                <Button x:Name="RememberPaletteButton"
+                                        Margin="0,0,8,8"
+                                        Style="{StaticResource BrowserButtonStyle}"
+                                        Click="RememberPalette_Click"
+                                        Content="Remember for This WAD" />
+
+                                <Button x:Name="ForgetPaletteButton"
+                                        Margin="0,0,8,8"
+                                        Style="{StaticResource BrowserButtonStyle}"
+                                        Click="ForgetPalette_Click"
+                                        Content="Forget Remembered Choice" />
+                            </WrapPanel>
+
+                            <TextBlock x:Name="PaletteAssociationStatusText"
+                                       Margin="0,2,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="10"
+                                       TextWrapping="Wrap" />
+
+                        </StackPanel>
+
+                        <TextBlock Margin="0,18,0,0"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="10"
+                                   FontWeight="Bold"
+                                   Text="LIBRARY PATH" />
+
+                        <TextBlock x:Name="WadPathText"
+                                   Margin="0,4,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="10"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
