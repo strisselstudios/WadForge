@@ -928,7 +928,7 @@
                                Text="Browse and manage reusable texture archives shared across Companion projects." />
                 </StackPanel>
                 <Border Grid.Row="2"
-                        Padding="18"
+                        Padding="22"
                         Style="{StaticResource CardStyle}">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -951,7 +951,7 @@
                                            Text="Import WADs once, then open any archive to browse its textures visually." />
                             </StackPanel>
                             <WrapPanel Grid.Column="1"
-                                       Margin="20,0,-10,-10"
+                                       Margin="24,4,0,4"
                                        VerticalAlignment="Center">
                                 <Button Style="{StaticResource PrimaryButtonStyle}"
                                         Margin="0,0,10,10"
@@ -964,6 +964,7 @@
                                         Click="BrowseSelectedWad_Click"
                                         Content="Browse WAD" />
                                 <Button x:Name="WadLibraryMoreButton"
+                                        Visibility="Collapsed"
                                         Style="{StaticResource DarkButtonStyle}"
                                         Margin="0,0,10,10"
                                         Click="WadLibraryMoreButton_Click"
@@ -1005,33 +1006,66 @@
                                      TextChanged="WadSearchTextBox_TextChanged"
                                      ToolTip="Search WAD names, paths, formats, manifests, or validation text" />
                             <StackPanel Grid.Column="2"
-                                        Orientation="Horizontal">
+                                        Margin="2,2,2,2"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Bottom">
                                 <Button x:Name="Wad2LibraryTabButton"
                                         Tag="WAD2"
-                                        MinWidth="88"
-                                        Margin="0,0,8,0"
+                                        MinWidth="92"
+                                        MinHeight="44"
+                                        Margin="0,0,6,0"
+                                        Padding="16,9"
+                                        BorderThickness="1,1,1,0"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         Click="WadLibraryFormatTab_Click"
                                         Content="WAD2" />
                                 <Button x:Name="Wad3LibraryTabButton"
                                         Tag="WAD3"
-                                        MinWidth="88"
-                                        Margin="0,0,8,0"
+                                        MinWidth="92"
+                                        MinHeight="44"
+                                        Margin="0,0,6,0"
+                                        Padding="16,9"
+                                        BorderThickness="1,1,1,0"
                                         Style="{StaticResource DarkButtonStyle}"
                                         Click="WadLibraryFormatTab_Click"
                                         Content="WAD3" />
                                 <Button x:Name="FindOnlineWadsTabButton"
-                                        MinWidth="118"
+                                        MinWidth="150"
+                                        MinHeight="44"
+                                        Margin="0,0,2,0"
+                                        Padding="16,7"
+                                        BorderThickness="1,1,1,0"
                                         Style="{StaticResource DarkButtonStyle}"
-                                        Click="FindOnlineWads_Click"
-                                        Content="Find Online" />
+                                        Click="FindOnlineWads_Click">
+                                    <TextBlock Margin="2,0"
+                                               TextAlignment="Center"
+                                               LineHeight="14">
+                                        <Run Text="Browse Community" />
+                                        <LineBreak />
+                                        <Run Text="WADs" />
+                                    </TextBlock>
+                                </Button>
                             </StackPanel>
-                            <TextBlock x:Name="WadVisibleCountText"
-                                       Grid.Column="4"
-                                       VerticalAlignment="Center"
-                                       Foreground="{StaticResource MutedTextBrush}"
-                                       FontSize="12"
-                                       Text="0 shown" />
+                            <StackPanel Grid.Column="4"
+                                        Margin="4,2,4,2"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <TextBlock x:Name="WadVisibleCountText"
+                                           Margin="0,0,2,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           FontSize="12"
+                                           Text="0 shown" />
+                                <Button x:Name="RefreshWadsButton"
+                                        Width="32"
+                                        Height="32"
+                                        Margin="10,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        Click="RefreshRegistrations_Click"
+                                        Content="↻"
+                                        ToolTip="Refreshes WAD list" />
+                            </StackPanel>
                         </Grid>
                     </Grid>
                 </Border>
@@ -1053,7 +1087,51 @@
                                   SelectionChanged="RegistrationGrid_SelectionChanged"
                                   MouseDoubleClick="RegistrationGrid_MouseDoubleClick">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Width="*" MinWidth="220" Header="WAD" Binding="{Binding WadFileName}" />
+                                <DataGridTemplateColumn Width="*" MinWidth="300" Header="WAD">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Margin="6,0,10,0"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding WadFileName}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding WadFileName}" />
+                                                <Button Grid.Column="1"
+                                                        Focusable="False"
+                                                        Click="RemoveWadRow_Click"
+                                                        Content="Remove"
+                                                        ToolTip="Remove this WAD from the Companion library">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button"
+                                                               BasedOn="{StaticResource DarkButtonStyle}">
+                                                            <Setter Property="Visibility"
+                                                                    Value="Collapsed" />
+                                                            <Setter Property="Padding"
+                                                                    Value="9,3" />
+                                                            <Setter Property="MinHeight"
+                                                                    Value="26" />
+                                                            <Setter Property="Margin"
+                                                                    Value="12,0,6,0" />
+                                                            <Setter Property="FontSize"
+                                                                    Value="11" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type DataGridRow}}, Path=IsSelected}"
+                                                                             Value="True">
+                                                                    <Setter Property="Visibility"
+                                                                            Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                                 <DataGridTextColumn Width="80" Header="Format" Binding="{Binding WadFormat}" />
                                 <DataGridTextColumn Width="95" Header="Textures" Binding="{Binding TextureCountText}" />
                                 <DataGridTextColumn Width="80" Header="Aliases" Binding="{Binding AliasCountText}" />

@@ -715,6 +715,27 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        string importStartDirectory =
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.DesktopDirectory);
+
+        if (!Directory.Exists(
+                importStartDirectory))
+        {
+            importStartDirectory =
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.UserProfile);
+        }
+
+        if (!Directory.Exists(
+                importStartDirectory))
+        {
+            importStartDirectory =
+                Path.GetPathRoot(
+                    Environment.SystemDirectory) ??
+                Environment.CurrentDirectory;
+        }
+
         OpenFileDialog dialog = new()
         {
             Title = "Import WAD2 or WAD3 archives into the Companion library",
@@ -723,19 +744,19 @@ public partial class MainWindow : Window
                 "All files|*.*",
             Multiselect = true,
             CheckFileExists = true,
-            CheckPathExists = true
+            CheckPathExists = true,
+            InitialDirectory =
+                importStartDirectory
         };
 
         if (dialog.ShowDialog(this) != true)
         {
             return;
         }
-
         AddWadPaths(
             dialog.FileNames,
             "file picker");
     }
-
     private void FindOnlineWads_Click(
         object sender,
         RoutedEventArgs e)
@@ -1416,6 +1437,27 @@ public partial class MainWindow : Window
             true;
     }
 
+    private void RemoveWadRow_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.DataContext is not WadRegistrationResult selected)
+        {
+            return;
+        }
+
+        e.Handled =
+            true;
+
+        RegistrationGrid.UnselectAll();
+        RegistrationGrid.SelectedItem =
+            selected;
+
+        RemoveSelected_Click(
+            sender,
+            e);
+    }
     private void RemoveSelected_Click(
         object sender,
         RoutedEventArgs e)
