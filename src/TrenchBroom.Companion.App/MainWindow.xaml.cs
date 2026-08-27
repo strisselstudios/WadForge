@@ -26,6 +26,9 @@ public partial class MainWindow : Window
 
     private ICollectionView? _wadLibraryView;
 
+    private string _wadLibraryFormat =
+        "WAD2";
+
     public MainWindow()
     {
         InitializeComponent();
@@ -42,8 +45,7 @@ public partial class MainWindow : Window
 
         DataContext = this;
 
-        WadFormatFilterComboBox.SelectedIndex =
-            0;
+        UpdateWadLibraryTabPresentation();
         ConfigureTrenchBroomPresentation();
 
         try
@@ -1080,15 +1082,10 @@ public partial class MainWindow : Window
         string search =
             WadSearchTextBox.Text.Trim();
 
-        string selectedFormat =
-            (WadFormatFilterComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ??
-            "All";
-
-        bool formatMatches =
-            string.Equals(selectedFormat,"All",StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(wad.WadFormat,selectedFormat,StringComparison.OrdinalIgnoreCase);
-
-        if (!formatMatches)
+        if (!string.Equals(
+                wad.WadFormat,
+                _wadLibraryFormat,
+                StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -1104,7 +1101,6 @@ public partial class MainWindow : Window
             ContainsSearch(wad.ManifestFileName,search) ||
             ContainsSearch(wad.Validation,search);
     }
-
     private static bool ContainsSearch(
         string? value,
         string search)
@@ -1120,13 +1116,59 @@ public partial class MainWindow : Window
         RefreshWadLibraryBrowser();
     }
 
-    private void WadFormatFilterComboBox_SelectionChanged(
+    private void WadLibraryFormatTab_Click(
         object sender,
-        SelectionChangedEventArgs e)
+        RoutedEventArgs e)
     {
+        if (sender is not Button button ||
+            button.Tag is not string format ||
+            (format != "WAD2" &&
+             format != "WAD3"))
+        {
+            return;
+        }
+
+        if (string.Equals(
+                _wadLibraryFormat,
+                format,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _wadLibraryFormat =
+            format;
+
+        RegistrationGrid.SelectedItem =
+            null;
+
+        UpdateWadLibraryTabPresentation();
         RefreshWadLibraryBrowser();
+
+        StatusText.Text =
+            $"Showing the global {_wadLibraryFormat} library.";
     }
 
+    private void UpdateWadLibraryTabPresentation()
+    {
+        bool wad2Selected =
+            string.Equals(
+                _wadLibraryFormat,
+                "WAD2",
+                StringComparison.OrdinalIgnoreCase);
+
+        Wad2LibraryTabButton.Style =
+            (Style)FindResource(
+                wad2Selected
+                    ? "PrimaryButtonStyle"
+                    : "DarkButtonStyle");
+
+        Wad3LibraryTabButton.Style =
+            (Style)FindResource(
+                wad2Selected
+                    ? "DarkButtonStyle"
+                    : "PrimaryButtonStyle");
+    }
     private void RefreshWadLibraryBrowser()
     {
         if (_wadLibraryView is null)
@@ -1136,33 +1178,52 @@ public partial class MainWindow : Window
 
         _wadLibraryView.Refresh();
 
-        int totalCount = RegisteredWads.Count;
-        int visibleCount = _wadLibraryView.Cast<object>().Count();
+        int formatCount =
+            RegisteredWads.Count(
+                wad =>
+                    string.Equals(
+                        wad.WadFormat,
+                        _wadLibraryFormat,
+                        StringComparison.OrdinalIgnoreCase));
+
+        int visibleCount =
+            _wadLibraryView.Cast<object>().Count();
 
         WadVisibleCountText.Text =
-            totalCount == visibleCount
-                ? $"{visibleCount:N0} shown"
-                : $"{visibleCount:N0} of {totalCount:N0} shown";
+            visibleCount == formatCount
+                ? $"{visibleCount:N0} {_wadLibraryFormat} shown"
+                : $"{visibleCount:N0} of {formatCount:N0} {_wadLibraryFormat} shown";
 
-        if (totalCount == 0)
+        if (formatCount == 0)
         {
-            EmptyRegistrationTitleText.Text = "No WADs in the library yet";
-            EmptyRegistrationDetailText.Text = "Drag WAD files or folders here, or use Import WADs.";
-            EmptyRegistrationPanel.Visibility = Visibility.Visible;
+            EmptyRegistrationTitleText.Text =
+                $"No {_wadLibraryFormat} WADs in the library yet";
+
+            EmptyRegistrationDetailText.Text =
+                _wadLibraryFormat == "WAD2"
+                    ? "Import a WAD2 archive, drag one here, or find Quake WADs online."
+                    : "Import a WAD3 archive or create a compatible WAD3 version from a WAD2 source.";
+
+            EmptyRegistrationPanel.Visibility =
+                Visibility.Visible;
         }
         else if (visibleCount == 0)
         {
-            EmptyRegistrationTitleText.Text = "No WADs match your filters";
-            EmptyRegistrationDetailText.Text = "Try a different search term or WAD format.";
-            EmptyRegistrationPanel.Visibility = Visibility.Visible;
+            EmptyRegistrationTitleText.Text =
+                $"No {_wadLibraryFormat} WADs match your search";
+
+            EmptyRegistrationDetailText.Text =
+                "Clear or change the search term.";
+
+            EmptyRegistrationPanel.Visibility =
+                Visibility.Visible;
         }
         else
         {
-            EmptyRegistrationPanel.Visibility = Visibility.Collapsed;
+            EmptyRegistrationPanel.Visibility =
+                Visibility.Collapsed;
         }
     }
-
-
     private void BrowseSelectedWad_Click(
         object sender,
         RoutedEventArgs e)

@@ -957,10 +957,6 @@
                                         Margin="0,0,10,10"
                                         Click="AddWads_Click"
                                         Content="Import WADs" />
-                                <Button Style="{StaticResource DarkButtonStyle}"
-                                        Margin="0,0,10,10"
-                                        Click="FindOnlineWads_Click"
-                                        Content="Find Online" />
                                 <Button x:Name="BrowseWadButton"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         Margin="0,0,10,10"
@@ -991,7 +987,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="12" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
@@ -1000,14 +996,28 @@
                                      VerticalContentAlignment="Center"
                                      TextChanged="WadSearchTextBox_TextChanged"
                                      ToolTip="Search WAD names, paths, formats, manifests, or validation text" />
-                            <ComboBox x:Name="WadFormatFilterComboBox"
-                                      Grid.Column="2"
-                                      Height="38"
-                                      SelectionChanged="WadFormatFilterComboBox_SelectionChanged">
-                                <ComboBoxItem Tag="All" Content="All formats" />
-                                <ComboBoxItem Tag="WAD2" Content="WAD2" />
-                                <ComboBoxItem Tag="WAD3" Content="WAD3" />
-                            </ComboBox>
+                            <StackPanel Grid.Column="2"
+                                        Orientation="Horizontal">
+                                <Button x:Name="Wad2LibraryTabButton"
+                                        Tag="WAD2"
+                                        MinWidth="88"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Click="WadLibraryFormatTab_Click"
+                                        Content="WAD2" />
+                                <Button x:Name="Wad3LibraryTabButton"
+                                        Tag="WAD3"
+                                        MinWidth="88"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource DarkButtonStyle}"
+                                        Click="WadLibraryFormatTab_Click"
+                                        Content="WAD3" />
+                                <Button x:Name="FindOnlineWadsTabButton"
+                                        MinWidth="118"
+                                        Style="{StaticResource DarkButtonStyle}"
+                                        Click="FindOnlineWads_Click"
+                                        Content="Find Online" />
+                            </StackPanel>
                             <TextBlock x:Name="WadVisibleCountText"
                                        Grid.Column="4"
                                        VerticalAlignment="Center"
