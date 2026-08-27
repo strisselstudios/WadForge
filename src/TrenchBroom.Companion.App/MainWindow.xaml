@@ -957,6 +957,10 @@
                                         Margin="0,0,10,10"
                                         Click="AddWads_Click"
                                         Content="Import WADs" />
+                                <Button Style="{StaticResource DarkButtonStyle}"
+                                        Margin="0,0,10,10"
+                                        Click="FindOnlineWads_Click"
+                                        Content="Find Online" />
                                 <Button x:Name="BrowseWadButton"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         Margin="0,0,10,10"

@@ -734,6 +734,63 @@ public partial class MainWindow : Window
             "file picker");
     }
 
+    private void FindOnlineWads_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (!TryEnsureWadLibraryRoot(
+                out string managedDataRoot))
+        {
+            return;
+        }
+
+        string? activeGameId =
+            _projectSession?.Project.GameId;
+
+        string? duskPalettePath =
+            TryGetActiveDuskPalettePath();
+
+        IReadOnlyList<string> quakeInstallations =
+            _gameInstallationLocator.FindInstallations(
+                CompanionGameProfiles.Quake);
+
+        CompanionOnlineWadBrowserWindow dialog =
+            new(
+                managedDataRoot,
+                _wadLibraryService,
+                _paletteLibraryService,
+                activeGameId,
+                _gameInstallationDirectory,
+                duskPalettePath,
+                quakeInstallations)
+            {
+                Owner =
+                    this
+            };
+
+        dialog.ShowDialog();
+
+        if (dialog.ImportedCount <=
+            0)
+        {
+            return;
+        }
+
+        SynchronizeRegisteredWadsWithLibrary(
+            managedDataRoot,
+            adoptExternalWads:
+                false);
+
+        SaveSettings();
+        RefreshInterface();
+
+        StatusText.Text =
+            dialog.ImportedCount ==
+                1
+                ? "Online WAD added to the global Companion library."
+                : $"{dialog.ImportedCount:N0} online WAD imports completed.";
+    }
+
     private void Window_DragEnter(
         object sender,
         DragEventArgs e)
