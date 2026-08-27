@@ -1396,6 +1396,26 @@ public partial class MainWindow : Window
             $"{RegisteredWads.Count:N0} legacy WAD registration(s) revalidated.";
     }
 
+    private void WadLibraryMoreButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (WadLibraryMoreButton.ContextMenu is not
+            ContextMenu menu)
+        {
+            return;
+        }
+
+        menu.PlacementTarget =
+            WadLibraryMoreButton;
+
+        menu.Placement =
+            System.Windows.Controls.Primitives.PlacementMode.Bottom;
+
+        menu.IsOpen =
+            true;
+    }
+
     private void RemoveSelected_Click(
         object sender,
         RoutedEventArgs e)
@@ -1541,10 +1561,10 @@ public partial class MainWindow : Window
         int selectedCount =
             RegistrationGrid.SelectedItems.Count;
 
-        RemoveButton.IsEnabled =
+        RemoveWadMenuItem.IsEnabled =
             selectedCount > 0;
 
-        OpenFolderButton.IsEnabled =
+        OpenWadFolderMenuItem.IsEnabled =
             selectedCount == 1;
 
         BrowseWadButton.IsEnabled =
@@ -1781,16 +1801,16 @@ public partial class MainWindow : Window
 
         RefreshWadLibraryBrowser();
 
-        RefreshButton.IsEnabled =
+        RefreshWadsMenuItem.IsEnabled =
             count > 0;
 
         int selectedCount =
             RegistrationGrid.SelectedItems.Count;
 
-        RemoveButton.IsEnabled =
+        RemoveWadMenuItem.IsEnabled =
             selectedCount > 0;
 
-        OpenFolderButton.IsEnabled =
+        OpenWadFolderMenuItem.IsEnabled =
             selectedCount == 1;
     }
 }

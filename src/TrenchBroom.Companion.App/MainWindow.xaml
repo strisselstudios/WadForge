@@ -963,24 +963,32 @@
                                         IsEnabled="False"
                                         Click="BrowseSelectedWad_Click"
                                         Content="Browse WAD" />
-                                <Button x:Name="RefreshButton"
+                                <Button x:Name="WadLibraryMoreButton"
                                         Style="{StaticResource DarkButtonStyle}"
                                         Margin="0,0,10,10"
-                                        IsEnabled="False"
-                                        Click="RefreshRegistrations_Click"
-                                        Content="Refresh" />
-                                <Button x:Name="OpenFolderButton"
-                                        Style="{StaticResource DarkButtonStyle}"
-                                        Margin="0,0,10,10"
-                                        IsEnabled="False"
-                                        Click="OpenSelectedFolder_Click"
-                                        Content="Open Folder" />
-                                <Button x:Name="RemoveButton"
-                                        Style="{StaticResource DarkButtonStyle}"
-                                        Margin="0,0,10,10"
-                                        IsEnabled="False"
-                                        Click="RemoveSelected_Click"
-                                        Content="Remove from Library" />
+                                        Click="WadLibraryMoreButton_Click"
+                                        Content="More">
+                                    <Button.ContextMenu>
+                                        <ContextMenu Style="{StaticResource DarkContextMenuStyle}">
+                                            <MenuItem x:Name="RefreshWadsMenuItem"
+                                                      Header="Refresh Library"
+                                                      Style="{StaticResource DarkMenuItemStyle}"
+                                                      IsEnabled="False"
+                                                      Click="RefreshRegistrations_Click" />
+                                            <MenuItem x:Name="OpenWadFolderMenuItem"
+                                                      Header="Open Folder"
+                                                      Style="{StaticResource DarkMenuItemStyle}"
+                                                      IsEnabled="False"
+                                                      Click="OpenSelectedFolder_Click" />
+                                            <Separator />
+                                            <MenuItem x:Name="RemoveWadMenuItem"
+                                                      Header="Remove from Library"
+                                                      Style="{StaticResource DarkMenuItemStyle}"
+                                                      IsEnabled="False"
+                                                      Click="RemoveSelected_Click" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                             </WrapPanel>
                         </Grid>
                         <Grid Grid.Row="2">
