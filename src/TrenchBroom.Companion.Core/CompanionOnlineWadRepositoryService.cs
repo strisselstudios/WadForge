@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using SharpCompress.Archives;
+using SharpCompress.Archives.Zip;
+using SharpCompress.Readers;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -26,6 +29,8 @@ public interface ICompanionOnlineWadRepository
 
     string DisplayName { get; }
 
+    string Summary { get; }
+
     string Description { get; }
 
     Uri CatalogUri { get; }
@@ -40,7 +45,8 @@ public static class CompanionOnlineWadRepositories
     {
         return new ICompanionOnlineWadRepository[]
         {
-            new CompanionQuaketasticWadRepository()
+            new CompanionQuaketasticWadRepository(),
+            new CompanionQuaddictedWadRepository()
         };
     }
 }
@@ -62,6 +68,9 @@ public sealed class CompanionQuaketasticWadRepository :
 
     public string DisplayName =>
         "Quaketastic";
+
+    public string Summary =>
+        "Quake · WAD2 texture WADs";
 
     public string Description =>
         "Community Quake texture WAD archive. Companion validates the downloaded file before preview or import.";
@@ -172,12 +181,196 @@ public sealed class CompanionQuaketasticWadRepository :
     }
 }
 
+public sealed class CompanionQuaddictedWadRepository :
+    ICompanionOnlineWadRepository
+{
+    private static readonly HttpClient HttpClient =
+        CreateHttpClient();
+
+    private static readonly Regex DownloadHrefRegex =
+        new(
+            "href\\s*=\\s*[\"'](?<href>[^\"']+\\.(?:wad|zip))[\"']",
+            RegexOptions.IgnoreCase |
+            RegexOptions.Compiled);
+
+    public string Id =>
+        "quaddicted";
+
+    public string DisplayName =>
+        "Quaddicted";
+
+    public string Summary =>
+        "Quake · WAD2 archive + ZIP packs";
+
+    public string Description =>
+        "Long-running Quake texture WAD archive. Companion supports direct WADs and ZIP packages, preserving archive paths so individual WADs can be previewed or imported.";
+
+    public Uri CatalogUri { get; } =
+        new(
+            "https://www.quaddicted.com/files/wads/",
+            UriKind.Absolute);
+
+    public async Task<IReadOnlyList<CompanionOnlineWadEntry>> GetEntriesAsync(
+        CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request =
+            new(
+                HttpMethod.Get,
+                CatalogUri);
+
+        using HttpResponseMessage response =
+            await HttpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseContentRead,
+                cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        string html =
+            await response.Content.ReadAsStringAsync(
+                cancellationToken);
+
+        Dictionary<string, CompanionOnlineWadEntry> entries =
+            new(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (Match match in
+                 DownloadHrefRegex.Matches(
+                     html))
+        {
+            string href =
+                WebUtility.HtmlDecode(
+                    match.Groups["href"].Value)
+                .Trim();
+
+            if (!Uri.TryCreate(
+                    CatalogUri,
+                    href,
+                    out Uri? downloadUri) ||
+                downloadUri is null ||
+                !string.Equals(
+                    downloadUri.Scheme,
+                    Uri.UriSchemeHttps,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    downloadUri.Host,
+                    CatalogUri.Host,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string extension =
+                Path.GetExtension(
+                    downloadUri.AbsolutePath);
+
+            if (!string.Equals(
+                    extension,
+                    ".wad",
+                    StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(
+                    extension,
+                    ".zip",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string fileName =
+                Uri.UnescapeDataString(
+                    downloadUri.Segments[^1]);
+
+            if (string.IsNullOrWhiteSpace(
+                    fileName))
+            {
+                continue;
+            }
+
+            CompanionOnlineWadEntry entry =
+                new(
+                    Id,
+                    DisplayName,
+                    fileName,
+                    GetDisplayName(
+                        fileName),
+                    "WAD2",
+                    "Quake",
+                    CatalogUri,
+                    downloadUri);
+
+            entries[downloadUri.AbsoluteUri] =
+                entry;
+        }
+
+        return entries
+            .Values
+            .OrderBy(
+                entry =>
+                    entry.DisplayName,
+                StringComparer.OrdinalIgnoreCase)
+            .ThenBy(
+                entry =>
+                    entry.FileName,
+                StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string GetDisplayName(
+        string fileName)
+    {
+        string displayName =
+            Path.GetFileNameWithoutExtension(
+                fileName);
+
+        if (displayName.EndsWith(
+                ".wad",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            displayName =
+                Path.GetFileNameWithoutExtension(
+                    displayName);
+        }
+
+        return displayName;
+    }
+
+    private static HttpClient CreateHttpClient()
+    {
+        HttpClient client =
+            new()
+            {
+                Timeout =
+                    TimeSpan.FromSeconds(
+                        30)
+            };
+
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "TrenchBroom-Companion/1.0");
+
+        return client;
+    }
+}
+
+public sealed record CompanionOnlineWadDownloadedItem(
+    string ArchivePath,
+    string FileName,
+    string TemporaryPath);
+
+public sealed record CompanionOnlineWadArchiveIssue(
+    string ArchivePath,
+    string Message);
+
+public sealed record CompanionOnlineWadDownloadResult(
+    string SourceFilePath,
+    IReadOnlyList<CompanionOnlineWadDownloadedItem> Wads,
+    IReadOnlyList<CompanionOnlineWadArchiveIssue> Issues);
+
 public static class CompanionOnlineWadDownloadService
 {
     private static readonly HttpClient HttpClient =
         CreateHttpClient();
 
-    public static async Task<string> DownloadTemporaryAsync(
+    public static async Task<CompanionOnlineWadDownloadResult> DownloadPackageAsync(
         CompanionOnlineWadEntry entry,
         string managedDataRoot,
         CancellationToken cancellationToken)
@@ -216,7 +409,7 @@ public static class CompanionOnlineWadDownloadService
                 "download.wad";
         }
 
-        string temporaryPath =
+        string downloadedPath =
             Path.Combine(
                 cacheDirectory,
                 safeFileName);
@@ -240,29 +433,288 @@ public static class CompanionOnlineWadDownloadService
                 await response.Content.ReadAsStreamAsync(
                     cancellationToken);
 
-            await using FileStream destination =
+            await using (FileStream destination =
                 new(
-                    temporaryPath,
+                    downloadedPath,
                     FileMode.CreateNew,
                     FileAccess.Write,
                     FileShare.None,
                     81920,
                     useAsync:
-                        true);
+                        true))
+            {
+                await source.CopyToAsync(
+                    destination,
+                    cancellationToken);
 
-            await source.CopyToAsync(
-                destination,
+                await destination.FlushAsync(
+                    cancellationToken);
+            }
+
+            return await PrepareDownloadedPackageAsync(
+                downloadedPath,
+                cacheDirectory,
                 cancellationToken);
-
-            return temporaryPath;
         }
         catch
         {
             DeleteTemporaryDownload(
-                temporaryPath);
+                downloadedPath);
 
             throw;
         }
+    }
+
+    public static async Task<string> DownloadTemporaryAsync(
+        CompanionOnlineWadEntry entry,
+        string managedDataRoot,
+        CancellationToken cancellationToken)
+    {
+        CompanionOnlineWadDownloadResult package =
+            await DownloadPackageAsync(
+                entry,
+                managedDataRoot,
+                cancellationToken);
+
+        if (package.Wads.Count ==
+            1)
+        {
+            return package.Wads[0].TemporaryPath;
+        }
+
+        DeleteTemporaryDownload(
+            package.SourceFilePath);
+
+        throw new InvalidDataException(
+            $"The downloaded ZIP '{Path.GetFileName(package.SourceFilePath)}' contains {package.Wads.Count:N0} WAD files. Open it through the community archive browser to choose individual WADs or import them all.");
+    }
+
+    private static async Task<CompanionOnlineWadDownloadResult> PrepareDownloadedPackageAsync(
+        string downloadedPath,
+        string cacheDirectory,
+        CancellationToken cancellationToken)
+    {
+        string extension =
+            Path.GetExtension(
+                downloadedPath);
+
+        if (string.Equals(
+                extension,
+                ".wad",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            CompanionOnlineWadDownloadedItem wad =
+                new(
+                    Path.GetFileName(
+                        downloadedPath),
+                    Path.GetFileName(
+                        downloadedPath),
+                    downloadedPath);
+
+            return new CompanionOnlineWadDownloadResult(
+                downloadedPath,
+                new[]
+                {
+                    wad
+                },
+                Array.Empty<CompanionOnlineWadArchiveIssue>());
+        }
+
+        if (!string.Equals(
+                extension,
+                ".zip",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"The downloaded community asset '{Path.GetFileName(downloadedPath)}' is not a WAD or ZIP archive.");
+        }
+
+        string extractionDirectory =
+            Path.Combine(
+                cacheDirectory,
+                "Extracted");
+
+        Directory.CreateDirectory(
+            extractionDirectory);
+
+        List<CompanionOnlineWadDownloadedItem> extractedWads =
+            new();
+
+        List<CompanionOnlineWadArchiveIssue> issues =
+            new();
+
+        ReaderOptions readerOptions =
+            ReaderOptions.ForFilePath
+                .WithExtensionHint(
+                    "zip")
+                .WithDisableCheckIncomplete(
+                    true);
+
+        using IArchive archive =
+            ArchiveFactory.OpenArchive(
+                downloadedPath,
+                readerOptions);
+
+        IArchiveEntry[] wadEntries =
+            archive.Entries
+                .Where(
+                    archiveEntry =>
+                        !archiveEntry.IsDirectory &&
+                        !string.IsNullOrWhiteSpace(
+                            archiveEntry.Key) &&
+                        archiveEntry.Key.EndsWith(
+                            ".wad",
+                            StringComparison.OrdinalIgnoreCase))
+                .OrderBy(
+                    archiveEntry =>
+                        archiveEntry.Key,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        if (wadEntries.Length ==
+            0)
+        {
+            throw new InvalidDataException(
+                $"The downloaded ZIP '{Path.GetFileName(downloadedPath)}' does not contain a WAD file.");
+        }
+
+        for (int index = 0;
+             index < wadEntries.Length;
+             index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            IArchiveEntry wadEntry =
+                wadEntries[index];
+
+            string archivePath =
+                (wadEntry.Key ??
+                 string.Empty)
+                    .Replace(
+                        '\\',
+                        '/')
+                    .TrimStart(
+                        '/');
+
+            string wadFileName =
+                Path.GetFileName(
+                    archivePath);
+
+            if (string.IsNullOrWhiteSpace(
+                    wadFileName))
+            {
+                wadFileName =
+                    $"archive-{index + 1:N0}.wad";
+            }
+
+            string extractedMemberDirectory =
+                Path.Combine(
+                    extractionDirectory,
+                    $"{index + 1:D4}");
+
+            Directory.CreateDirectory(
+                extractedMemberDirectory);
+
+            string extractedPath =
+                Path.Combine(
+                    extractedMemberDirectory,
+                    SanitizeFileName(wadFileName));
+
+            try
+            {
+                using Stream entrySource =
+                    wadEntry.OpenEntryStream();
+
+                await using FileStream destination =
+                    new(
+                        extractedPath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        81920,
+                        useAsync:
+                            true);
+
+                await entrySource.CopyToAsync(
+                    destination,
+                    cancellationToken);
+
+                await destination.FlushAsync(
+                    cancellationToken);
+
+                extractedWads.Add(
+                    new CompanionOnlineWadDownloadedItem(
+                        archivePath,
+                        wadFileName,
+                        extractedPath));
+            }
+            catch (Exception exception)
+                when (exception is not
+                      OperationCanceledException)
+            {
+                try
+                {
+                    if (File.Exists(
+                            extractedPath))
+                    {
+                        File.Delete(
+                            extractedPath);
+                    }
+                }
+                catch
+                {
+                }
+
+                issues.Add(
+                    new CompanionOnlineWadArchiveIssue(
+                        archivePath,
+                        exception.Message));
+            }
+        }
+
+        if (extractedWads.Count ==
+                0 &&
+            issues.Count >
+                0)
+        {
+            string firstIssue =
+                issues[0].Message;
+
+            throw new InvalidDataException(
+                $"The ZIP contains WAD files, but none could be extracted. First issue: {firstIssue}");
+        }
+
+        return new CompanionOnlineWadDownloadResult(
+            downloadedPath,
+            extractedWads,
+            issues);
+    }
+
+    private static string SanitizeFileName(
+        string fileName)
+    {
+        HashSet<char> invalid =
+            Path.GetInvalidFileNameChars()
+                .ToHashSet();
+
+        char[] characters =
+            fileName
+                .Select(
+                    character =>
+                        invalid.Contains(
+                            character)
+                            ? '_'
+                            : character)
+                .ToArray();
+
+        string sanitized =
+            new(
+                characters);
+
+        return string.IsNullOrWhiteSpace(
+                sanitized)
+            ? "archive.wad"
+            : sanitized;
     }
 
     public static void DeleteTemporaryDownload(
@@ -276,13 +728,50 @@ public static class CompanionOnlineWadDownloadService
 
         try
         {
-            string? directory =
-                Path.GetDirectoryName(
+            string fullPath =
+                Path.GetFullPath(
                     temporaryPath);
 
-            if (!string.IsNullOrWhiteSpace(
-                    directory) &&
+            string? directory =
                 Directory.Exists(
+                    fullPath)
+                    ? fullPath
+                    : Path.GetDirectoryName(
+                        fullPath);
+
+            if (string.IsNullOrWhiteSpace(
+                    directory))
+            {
+                return;
+            }
+
+            DirectoryInfo? current =
+                new(
+                    directory);
+
+            while (current is not
+                   null)
+            {
+                if (current.Parent is not
+                        null &&
+                    string.Equals(
+                        current.Parent.Name,
+                        "OnlineWads",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    Directory.Delete(
+                        current.FullName,
+                        recursive:
+                            true);
+
+                    return;
+                }
+
+                current =
+                    current.Parent;
+            }
+
+            if (Directory.Exists(
                     directory))
             {
                 Directory.Delete(

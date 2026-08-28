@@ -54,15 +54,49 @@
         </Style>
 
         <Style TargetType="ListBox">
-            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Background" Value="#111820" />
             <Setter Property="Foreground" Value="#FFFFFF" />
-            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="#2B3745" />
+            <Setter Property="BorderThickness" Value="1" />
         </Style>
 
         <Style TargetType="ListBoxItem">
             <Setter Property="Foreground" Value="#FFFFFF" />
-            <Setter Property="Padding" Value="9,8" />
+            <Setter Property="Background" Value="#111820" />
+            <Setter Property="BorderBrush" Value="#26313D" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="10,9" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder"
+                                        Property="Background"
+                                        Value="#1B2632" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder"
+                                        Property="Background"
+                                        Value="#24476D" />
+                                <Setter TargetName="ItemBorder"
+                                        Property="BorderBrush"
+                                        Value="#5EA2FF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style TargetType="DataGrid">
@@ -147,7 +181,7 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="235" />
+                <ColumnDefinition Width="280" />
                 <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -179,8 +213,21 @@
 
                     <ListBox x:Name="RepositoryListBox"
                              Grid.Row="2"
-                             DisplayMemberPath="DisplayName"
-                             SelectionChanged="RepositoryListBox_SelectionChanged" />
+                             SelectionChanged="RepositoryListBox_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="{Binding DisplayName}" />
+                                    <TextBlock Margin="0,3,0,0"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="10"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding Summary}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Grid>
             </Border>
 
