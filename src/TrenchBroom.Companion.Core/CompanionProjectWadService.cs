@@ -659,9 +659,13 @@ public sealed class CompanionProjectWadService
                 propertyRegionStart..
                 propertyRegionEnd];
 
+        string propertyScanRegion =
+            MaskCommentsPreservingLayout(
+                propertyRegion);
+
         MatchCollection matches =
             WorldPropertyPattern.Matches(
-                propertyRegion);
+                propertyScanRegion);
 
         Match? classnameMatch =
             matches
@@ -1034,9 +1038,13 @@ public sealed class CompanionProjectWadService
                 propertyRegionStart..
                 propertyRegionEnd];
 
+        string propertyScanRegion =
+            MaskCommentsPreservingLayout(
+                propertyRegion);
+
         MatchCollection matches =
             WorldPropertyPattern.Matches(
-                propertyRegion);
+                propertyScanRegion);
 
         Match? classnameMatch =
             matches
@@ -1075,6 +1083,15 @@ public sealed class CompanionProjectWadService
                 $"The worldspawn contains more than one '{propertyName}' property.");
         }
 
+        bool removeProperty =
+            string.IsNullOrWhiteSpace(
+                propertyValue);
+
+        if (removeProperty &&
+            propertyMatches.Length == 0)
+        {
+            return mapText;
+        }
         string propertyLine =
             "\"" +
             propertyName +
@@ -1091,6 +1108,13 @@ public sealed class CompanionProjectWadService
             int absoluteStart =
                 propertyRegionStart +
                 existing.Index;
+
+            if (removeProperty)
+            {
+                return mapText.Remove(
+                    absoluteStart,
+                    existing.Length);
+            }
 
             return mapText.Remove(
                     absoluteStart,
@@ -1129,6 +1153,26 @@ public sealed class CompanionProjectWadService
                 "The map does not contain a worldspawn entity.");
         }
 
+        int close =
+            FindMatchingStructuralBrace(
+                text,
+                open);
+
+        if (close < 0)
+        {
+            throw new InvalidDataException(
+                "The worldspawn entity is missing a closing brace.");
+        }
+
+        return (
+            open,
+            close);
+    }
+
+    private static int FindMatchingStructuralBrace(
+        string text,
+        int openingBrace)
+    {
         int depth =
             0;
 
@@ -1141,7 +1185,10 @@ public sealed class CompanionProjectWadService
         bool inLineComment =
             false;
 
-        for (int index = open;
+        bool inBlockComment =
+            false;
+
+        for (int index = openingBrace;
              index < text.Length;
              index++)
         {
@@ -1159,6 +1206,20 @@ public sealed class CompanionProjectWadService
                 {
                     inLineComment =
                         false;
+                }
+
+                continue;
+            }
+
+            if (inBlockComment)
+            {
+                if (character == '*' &&
+                    next == '/')
+                {
+                    inBlockComment =
+                        false;
+
+                    index++;
                 }
 
                 continue;
@@ -1202,6 +1263,17 @@ public sealed class CompanionProjectWadService
                 continue;
             }
 
+            if (character == '/' &&
+                next == '*')
+            {
+                inBlockComment =
+                    true;
+
+                index++;
+
+                continue;
+            }
+
             if (character == '"')
             {
                 inQuote =
@@ -1210,25 +1282,38 @@ public sealed class CompanionProjectWadService
                 continue;
             }
 
-            if (character == '{')
+            if (character == '{' &&
+                IsStructuralBraceToken(
+                    text,
+                    index))
             {
                 depth++;
-            }
-            else if (character == '}')
-            {
-                depth--;
 
-                if (depth == 0)
-                {
-                    return (
-                        open,
-                        index);
-                }
+                continue;
+            }
+
+            if (character != '}' ||
+                !IsStructuralBraceToken(
+                    text,
+                    index))
+            {
+                continue;
+            }
+
+            depth--;
+
+            if (depth == 0)
+            {
+                return index;
+            }
+
+            if (depth < 0)
+            {
+                return -1;
             }
         }
 
-        throw new InvalidDataException(
-            "The worldspawn entity is missing a closing brace.");
+        return -1;
     }
 
     private static int FindFirstNestedOpeningBrace(
@@ -1243,6 +1328,9 @@ public sealed class CompanionProjectWadService
             false;
 
         bool inLineComment =
+            false;
+
+        bool inBlockComment =
             false;
 
         for (int index = start;
@@ -1268,6 +1356,20 @@ public sealed class CompanionProjectWadService
                 continue;
             }
 
+            if (inBlockComment)
+            {
+                if (character == '*' &&
+                    next == '/')
+                {
+                    inBlockComment =
+                        false;
+
+                    index++;
+                }
+
+                continue;
+            }
+
             if (inQuote)
             {
                 if (escaped)
@@ -1306,6 +1408,17 @@ public sealed class CompanionProjectWadService
                 continue;
             }
 
+            if (character == '/' &&
+                next == '*')
+            {
+                inBlockComment =
+                    true;
+
+                index++;
+
+                continue;
+            }
+
             if (character == '"')
             {
                 inQuote =
@@ -1314,7 +1427,10 @@ public sealed class CompanionProjectWadService
                 continue;
             }
 
-            if (character == '{')
+            if (character == '{' &&
+                IsStructuralBraceToken(
+                    text,
+                    index))
             {
                 return index;
             }
@@ -1335,6 +1451,9 @@ public sealed class CompanionProjectWadService
             false;
 
         bool inLineComment =
+            false;
+
+        bool inBlockComment =
             false;
 
         for (int index = start;
@@ -1360,6 +1479,20 @@ public sealed class CompanionProjectWadService
                 continue;
             }
 
+            if (inBlockComment)
+            {
+                if (character == '*' &&
+                    next == '/')
+                {
+                    inBlockComment =
+                        false;
+
+                    index++;
+                }
+
+                continue;
+            }
+
             if (inQuote)
             {
                 if (escaped)
@@ -1398,6 +1531,17 @@ public sealed class CompanionProjectWadService
                 continue;
             }
 
+            if (character == '/' &&
+                next == '*')
+            {
+                inBlockComment =
+                    true;
+
+                index++;
+
+                continue;
+            }
+
             if (character == '"')
             {
                 inQuote =
@@ -1406,13 +1550,215 @@ public sealed class CompanionProjectWadService
                 continue;
             }
 
-            if (character == target)
+            if (character == target &&
+                IsStructuralBraceToken(
+                    text,
+                    index))
             {
                 return index;
             }
         }
 
         return -1;
+    }
+
+    private static bool IsStructuralBraceToken(
+        string text,
+        int index)
+    {
+        if (index < 0 ||
+            index >= text.Length ||
+            (text[index] != '{' &&
+             text[index] != '}'))
+        {
+            return false;
+        }
+
+        bool leftBoundary =
+            index == 0 ||
+            char.IsWhiteSpace(
+                text[index - 1]) ||
+            text[index - 1] == '{' ||
+            text[index - 1] == '}';
+
+        if (!leftBoundary)
+        {
+            return false;
+        }
+
+        if (index + 1 >= text.Length)
+        {
+            return true;
+        }
+
+        char next =
+            text[index + 1];
+
+        if (char.IsWhiteSpace(
+                next) ||
+            next == '{' ||
+            next == '}')
+        {
+            return true;
+        }
+
+        if (next != '/' ||
+            index + 2 >= text.Length)
+        {
+            return false;
+        }
+
+        char commentKind =
+            text[index + 2];
+
+        return commentKind == '/' ||
+            commentKind == '*';
+    }
+    private static string MaskCommentsPreservingLayout(
+        string text)
+    {
+        char[] characters =
+            text.ToCharArray();
+
+        bool inQuote =
+            false;
+
+        bool escaped =
+            false;
+
+        bool inLineComment =
+            false;
+
+        bool inBlockComment =
+            false;
+
+        for (int index = 0;
+             index < characters.Length;
+             index++)
+        {
+            char character =
+                characters[index];
+
+            char next =
+                index + 1 < characters.Length
+                    ? characters[index + 1]
+                    : '\0';
+
+            if (inLineComment)
+            {
+                if (character == '\n')
+                {
+                    inLineComment =
+                        false;
+                }
+                else if (character != '\r')
+                {
+                    characters[index] =
+                        ' ';
+                }
+
+                continue;
+            }
+
+            if (inBlockComment)
+            {
+                if (character == '*' &&
+                    next == '/')
+                {
+                    characters[index] =
+                        ' ';
+
+                    characters[index + 1] =
+                        ' ';
+
+                    inBlockComment =
+                        false;
+
+                    index++;
+
+                    continue;
+                }
+
+                if (character != '\r' &&
+                    character != '\n')
+                {
+                    characters[index] =
+                        ' ';
+                }
+
+                continue;
+            }
+
+            if (inQuote)
+            {
+                if (escaped)
+                {
+                    escaped =
+                        false;
+
+                    continue;
+                }
+
+                if (character == '\\')
+                {
+                    escaped =
+                        true;
+
+                    continue;
+                }
+
+                if (character == '"')
+                {
+                    inQuote =
+                        false;
+                }
+
+                continue;
+            }
+
+            if (character == '/' &&
+                next == '/')
+            {
+                characters[index] =
+                    ' ';
+
+                characters[index + 1] =
+                    ' ';
+
+                inLineComment =
+                    true;
+
+                index++;
+
+                continue;
+            }
+
+            if (character == '/' &&
+                next == '*')
+            {
+                characters[index] =
+                    ' ';
+
+                characters[index + 1] =
+                    ' ';
+
+                inBlockComment =
+                    true;
+
+                index++;
+
+                continue;
+            }
+
+            if (character == '"')
+            {
+                inQuote =
+                    true;
+            }
+        }
+
+        return new string(
+            characters);
     }
 
     private static string EscapeMapPropertyValue(

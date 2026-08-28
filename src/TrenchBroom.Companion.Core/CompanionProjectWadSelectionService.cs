@@ -192,6 +192,11 @@ public sealed class CompanionProjectWadSelectionService
                 asset.WadPath);
         }
 
+        CompanionProjectWadSyncResult sync =
+            projectWadService.SynchronizeMapWorldspawnWads(
+                mapPath,
+                selectedPaths);
+
         map.WadAssetIds =
             normalizedIds;
 
@@ -202,12 +207,6 @@ public sealed class CompanionProjectWadSelectionService
         }
 
         session.Save();
-
-        CompanionProjectWadSyncResult sync =
-            projectWadService.SynchronizeMapWorldspawnWads(
-                mapPath,
-                selectedPaths);
-
         return new CompanionProjectWadSelectionResult(
             normalizedIds.Count,
             useAsProjectDefault,
