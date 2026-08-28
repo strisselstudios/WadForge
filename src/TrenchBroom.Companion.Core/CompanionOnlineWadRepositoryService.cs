@@ -46,7 +46,8 @@ public static class CompanionOnlineWadRepositories
         return new ICompanionOnlineWadRepository[]
         {
             new CompanionQuaketasticWadRepository(),
-            new CompanionQuaddictedWadRepository()
+            new CompanionQuaddictedWadRepository(),
+            new CompanionSlipseerWadRepository()
         };
     }
 }
@@ -398,68 +399,288 @@ public static class CompanionOnlineWadDownloadService
         Directory.CreateDirectory(
             cacheDirectory);
 
-        string safeFileName =
-            Path.GetFileName(
-                entry.FileName);
-
-        if (string.IsNullOrWhiteSpace(
-                safeFileName))
-        {
-            safeFileName =
-                "download.wad";
-        }
-
-        string downloadedPath =
+        string provisionalPath =
             Path.Combine(
                 cacheDirectory,
-                safeFileName);
+                "download.tmp");
+
+        string downloadedPath =
+            provisionalPath;
+
+        Uri currentUri =
+            entry.DownloadUri;
+
+        Uri? referrer =
+            entry.SourcePageUri;
+
+        HashSet<string> visitedUris =
+            new(
+                StringComparer.OrdinalIgnoreCase);
 
         try
         {
-            using HttpRequestMessage request =
-                new(
-                    HttpMethod.Get,
-                    entry.DownloadUri);
-
-            using HttpResponseMessage response =
-                await HttpClient.SendAsync(
-                    request,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    cancellationToken);
-
-            response.EnsureSuccessStatusCode();
-
-            await using Stream source =
-                await response.Content.ReadAsStreamAsync(
-                    cancellationToken);
-
-            await using (FileStream destination =
-                new(
-                    downloadedPath,
-                    FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None,
-                    81920,
-                    useAsync:
-                        true))
+            for (int hop = 0;
+                 hop < 8;
+                 hop++)
             {
-                await source.CopyToAsync(
-                    destination,
-                    cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                await destination.FlushAsync(
+                if (!visitedUris.Add(
+                        currentUri.AbsoluteUri))
+                {
+                    throw new InvalidDataException(
+                        $"The community download flow looped back to '{currentUri}'.");
+                }
+
+                using HttpRequestMessage request =
+                    new(
+                        HttpMethod.Get,
+                        currentUri);
+
+                AddCommunityBrowserHeaders(
+                    request);
+
+                if (referrer is not null &&
+                    !string.Equals(
+                        referrer.AbsoluteUri,
+                        currentUri.AbsoluteUri,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    request.Headers.Referrer =
+                        referrer;
+                }
+
+                using HttpResponseMessage response =
+                    await HttpClient.SendAsync(
+                        request,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        cancellationToken);
+
+                response.EnsureSuccessStatusCode();
+
+                Uri responseUri =
+                    response.RequestMessage?.RequestUri ??
+                    currentUri;
+
+                string? mediaType =
+                    response.Content.Headers.ContentType?.MediaType;
+
+                if (!string.IsNullOrWhiteSpace(
+                        mediaType) &&
+                    mediaType.Contains(
+                        "html",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    string html =
+                        await response.Content.ReadAsStringAsync(
+                            cancellationToken);
+
+                    Uri? resolvedDownload =
+                        FindDownloadTarget(
+                            responseUri,
+                            html);
+
+                    if (resolvedDownload is null)
+                    {
+                        throw new InvalidDataException(
+                            $"The community resource page '{entry.DisplayName}' returned HTML but did not expose a downloadable WAD/archive link.");
+                    }
+
+                    referrer =
+                        responseUri;
+
+                    currentUri =
+                        resolvedDownload;
+
+                    continue;
+                }
+
+                if (File.Exists(
+                        provisionalPath))
+                {
+                    File.Delete(
+                        provisionalPath);
+                }
+
+                await using Stream source =
+                    await response.Content.ReadAsStreamAsync(
+                        cancellationToken);
+
+                await using (FileStream destination =
+                    new(
+                        provisionalPath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        81920,
+                        useAsync:
+                            true))
+                {
+                    await source.CopyToAsync(
+                        destination,
+                        cancellationToken);
+
+                    await destination.FlushAsync(
+                        cancellationToken);
+                }
+
+                byte[] prefix =
+                    new byte[512];
+
+                int prefixLength;
+
+                await using (FileStream signatureStream =
+                    new(
+                        provisionalPath,
+                        FileMode.Open,
+                        FileAccess.Read,
+                        FileShare.Read,
+                        4096,
+                        useAsync:
+                            true))
+                {
+                    prefixLength =
+                        await signatureStream.ReadAsync(
+                            prefix.AsMemory(
+                                0,
+                                prefix.Length),
+                            cancellationToken);
+                }
+
+                string? detectedExtension =
+                    DetectCommunityAssetExtension(
+                        prefix,
+                        prefixLength);
+
+                if (detectedExtension is null &&
+                    LooksLikeHtml(
+                        prefix,
+                        prefixLength))
+                {
+                    string html =
+                        await File.ReadAllTextAsync(
+                            provisionalPath,
+                            cancellationToken);
+
+                    File.Delete(
+                        provisionalPath);
+
+                    Uri? resolvedDownload =
+                        FindDownloadTarget(
+                            responseUri,
+                            html);
+
+                    if (resolvedDownload is null)
+                    {
+                        throw new InvalidDataException(
+                            $"The community resource '{entry.DisplayName}' returned an HTML landing page but no downloadable WAD/archive link.");
+                    }
+
+                    referrer =
+                        responseUri;
+
+                    currentUri =
+                        resolvedDownload;
+
+                    continue;
+                }
+
+                if (detectedExtension is null)
+                {
+                    throw new InvalidDataException(
+                        $"The downloaded community resource '{entry.DisplayName}' is not a recognizable WAD2, WAD3, ZIP, 7z, or RAR asset.");
+                }
+
+                string? responseFileName =
+                    response.Content.Headers.ContentDisposition?.FileNameStar ??
+                    response.Content.Headers.ContentDisposition?.FileName;
+
+                responseFileName =
+                    responseFileName?
+                        .Trim()
+                        .Trim(
+                            '"');
+
+                if (!string.IsNullOrWhiteSpace(
+                        responseFileName))
+                {
+                    responseFileName =
+                        Path.GetFileName(
+                            responseFileName);
+                }
+
+                string preferredFileName =
+                    responseFileName ??
+                    GetFileNameFromUri(
+                        responseUri) ??
+                    entry.DisplayName;
+
+                string preferredBaseName =
+                    Path.GetFileNameWithoutExtension(
+                        preferredFileName);
+
+                if (string.IsNullOrWhiteSpace(
+                        preferredBaseName) ||
+                    string.Equals(
+                        preferredBaseName,
+                        "download",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        preferredBaseName,
+                        "index",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    preferredBaseName =
+                        entry.DisplayName;
+                }
+
+                string finalFileName =
+                    SanitizeFileName(
+                        preferredBaseName +
+                        detectedExtension);
+
+                downloadedPath =
+                    Path.Combine(
+                        cacheDirectory,
+                        finalFileName);
+
+                if (File.Exists(
+                        downloadedPath))
+                {
+                    File.Delete(
+                        downloadedPath);
+                }
+
+                File.Move(
+                    provisionalPath,
+                    downloadedPath);
+
+                return await PrepareDownloadedPackageAsync(
+                    downloadedPath,
+                    cacheDirectory,
                     cancellationToken);
             }
 
-            return await PrepareDownloadedPackageAsync(
-                downloadedPath,
-                cacheDirectory,
-                cancellationToken);
+            throw new InvalidDataException(
+                $"The community download flow for '{entry.DisplayName}' exceeded the maximum number of HTML/download hops.");
         }
         catch
         {
             DeleteTemporaryDownload(
                 downloadedPath);
+
+            if (File.Exists(
+                    provisionalPath))
+            {
+                try
+                {
+                    File.Delete(
+                        provisionalPath);
+                }
+                catch
+                {
+                }
+            }
 
             throw;
         }
@@ -520,13 +741,11 @@ public static class CompanionOnlineWadDownloadService
                 Array.Empty<CompanionOnlineWadArchiveIssue>());
         }
 
-        if (!string.Equals(
-                extension,
-                ".zip",
-                StringComparison.OrdinalIgnoreCase))
+        if (!IsSupportedCommunityArchiveExtension(
+                extension))
         {
             throw new InvalidDataException(
-                $"The downloaded community asset '{Path.GetFileName(downloadedPath)}' is not a WAD or ZIP archive.");
+                $"The downloaded community asset '{Path.GetFileName(downloadedPath)}' is not a supported WAD/archive.");
         }
 
         string extractionDirectory =
@@ -546,7 +765,8 @@ public static class CompanionOnlineWadDownloadService
         ReaderOptions readerOptions =
             ReaderOptions.ForFilePath
                 .WithExtensionHint(
-                    "zip")
+                    extension.TrimStart(
+                        '.'))
                 .WithDisableCheckIncomplete(
                     true);
 
@@ -575,7 +795,7 @@ public static class CompanionOnlineWadDownloadService
             0)
         {
             throw new InvalidDataException(
-                $"The downloaded ZIP '{Path.GetFileName(downloadedPath)}' does not contain a WAD file.");
+                $"The downloaded archive '{Path.GetFileName(downloadedPath)}' does not contain a WAD file.");
         }
 
         for (int index = 0;
@@ -618,7 +838,8 @@ public static class CompanionOnlineWadDownloadService
             string extractedPath =
                 Path.Combine(
                     extractedMemberDirectory,
-                    SanitizeFileName(wadFileName));
+                    SanitizeFileName(
+                        wadFileName));
 
             try
             {
@@ -681,13 +902,301 @@ public static class CompanionOnlineWadDownloadService
                 issues[0].Message;
 
             throw new InvalidDataException(
-                $"The ZIP contains WAD files, but none could be extracted. First issue: {firstIssue}");
+                $"The archive contains WAD files, but none could be extracted. First issue: {firstIssue}");
         }
 
         return new CompanionOnlineWadDownloadResult(
             downloadedPath,
             extractedWads,
             issues);
+    }
+
+    private static Uri? FindDownloadTarget(
+        Uri pageUri,
+        string html)
+    {
+        Regex anchorRegex =
+            new(
+                "<a\\b(?<attrs>[^>]*)>(?<text>.*?)</a>",
+                RegexOptions.IgnoreCase |
+                RegexOptions.Singleline);
+
+        Regex hrefRegex =
+            new(
+                "href\\s*=\\s*[\"'](?<href>[^\"']+)[\"']",
+                RegexOptions.IgnoreCase |
+                RegexOptions.Singleline);
+
+        Regex tagRegex =
+            new(
+                "<[^>]+>",
+                RegexOptions.Singleline);
+
+        Uri? bestUri =
+            null;
+
+        int bestScore =
+            int.MinValue;
+
+        foreach (Match anchor in
+                 anchorRegex.Matches(
+                     html))
+        {
+            string attrs =
+                anchor.Groups["attrs"].Value;
+
+            Match hrefMatch =
+                hrefRegex.Match(
+                    attrs);
+
+            if (!hrefMatch.Success)
+            {
+                continue;
+            }
+
+            string href =
+                WebUtility.HtmlDecode(
+                    hrefMatch.Groups["href"].Value)
+                .Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    href) ||
+                href.StartsWith(
+                    "#",
+                    StringComparison.Ordinal) ||
+                href.StartsWith(
+                    "javascript:",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!Uri.TryCreate(
+                    pageUri,
+                    href,
+                    out Uri? candidate) ||
+                candidate is null ||
+                !string.Equals(
+                    candidate.Scheme,
+                    Uri.UriSchemeHttps,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string text =
+                Regex.Replace(
+                    WebUtility.HtmlDecode(
+                        tagRegex.Replace(
+                            anchor.Groups["text"].Value,
+                            " ")),
+                    "\\s+",
+                    " ")
+                .Trim();
+
+            int score =
+                0;
+
+            if (string.Equals(
+                    text,
+                    "Download",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                score +=
+                    400;
+            }
+            else if (text.Contains(
+                         "Download",
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                score +=
+                    250;
+            }
+
+            if (href.Contains(
+                    "download",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                score +=
+                    220;
+            }
+
+            if (attrs.Contains(
+                    "button--cta",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                score +=
+                    100;
+            }
+
+            if (HasSupportedCommunityAssetExtension(
+                    candidate))
+            {
+                score +=
+                    150;
+            }
+
+            if (score >
+                bestScore)
+            {
+                bestScore =
+                    score;
+
+                bestUri =
+                    candidate;
+            }
+        }
+
+        return bestScore >
+            0
+            ? bestUri
+            : null;
+    }
+
+    private static string? DetectCommunityAssetExtension(
+        byte[] prefix,
+        int length)
+    {
+        if (length >=
+                4 &&
+            prefix[0] == (byte)'W' &&
+            prefix[1] == (byte)'A' &&
+            prefix[2] == (byte)'D' &&
+            (prefix[3] == (byte)'2' ||
+             prefix[3] == (byte)'3'))
+        {
+            return ".wad";
+        }
+
+        if (length >=
+                4 &&
+            prefix[0] == (byte)'P' &&
+            prefix[1] == (byte)'K')
+        {
+            return ".zip";
+        }
+
+        if (length >=
+                6 &&
+            prefix[0] == 0x37 &&
+            prefix[1] == 0x7A &&
+            prefix[2] == 0xBC &&
+            prefix[3] == 0xAF &&
+            prefix[4] == 0x27 &&
+            prefix[5] == 0x1C)
+        {
+            return ".7z";
+        }
+
+        if (length >=
+                7 &&
+            prefix[0] == 0x52 &&
+            prefix[1] == 0x61 &&
+            prefix[2] == 0x72 &&
+            prefix[3] == 0x21 &&
+            prefix[4] == 0x1A &&
+            prefix[5] == 0x07)
+        {
+            return ".rar";
+        }
+
+        return null;
+    }
+
+    private static bool LooksLikeHtml(
+        byte[] prefix,
+        int length)
+    {
+        if (length <=
+            0)
+        {
+            return false;
+        }
+
+        string text =
+            System.Text.Encoding.UTF8.GetString(
+                prefix,
+                0,
+                length)
+            .TrimStart();
+
+        return text.StartsWith(
+                   "<!DOCTYPE",
+                   StringComparison.OrdinalIgnoreCase) ||
+               text.StartsWith(
+                   "<html",
+                   StringComparison.OrdinalIgnoreCase) ||
+               text.StartsWith(
+                   "<head",
+                   StringComparison.OrdinalIgnoreCase) ||
+               text.StartsWith(
+                   "<body",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasSupportedCommunityAssetExtension(
+        Uri uri)
+    {
+        string extension =
+            Path.GetExtension(
+                uri.AbsolutePath);
+
+        return string.Equals(
+                   extension,
+                   ".wad",
+                   StringComparison.OrdinalIgnoreCase) ||
+               IsSupportedCommunityArchiveExtension(
+                   extension);
+    }
+
+    private static bool IsSupportedCommunityArchiveExtension(
+        string extension)
+    {
+        return string.Equals(
+                   extension,
+                   ".zip",
+                   StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(
+                   extension,
+                   ".7z",
+                   StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(
+                   extension,
+                   ".rar",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetFileNameFromUri(
+        Uri uri)
+    {
+        string fileName =
+            Path.GetFileName(
+                Uri.UnescapeDataString(
+                    uri.AbsolutePath));
+
+        return string.IsNullOrWhiteSpace(
+                fileName)
+            ? null
+            : fileName;
+    }
+
+    private static void AddCommunityBrowserHeaders(
+        HttpRequestMessage request)
+    {
+        request.Headers.UserAgent.Clear();
+
+        request.Headers.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36");
+
+        request.Headers.Accept.Clear();
+
+        request.Headers.Accept.ParseAdd(
+            "text/html,application/xhtml+xml,application/xml;q=0.9,application/octet-stream,*/*;q=0.8");
+
+        request.Headers.AcceptLanguage.Clear();
+
+        request.Headers.AcceptLanguage.ParseAdd(
+            "en-US,en;q=0.9");
     }
 
     private static string SanitizeFileName(
