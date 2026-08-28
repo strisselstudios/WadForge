@@ -47,7 +47,8 @@ public static class CompanionOnlineWadRepositories
         {
             new CompanionQuaketasticWadRepository(),
             new CompanionQuaddictedWadRepository(),
-            new CompanionSlipseerWadRepository()
+            new CompanionSlipseerWadRepository(),
+            new CompanionValveDeveloperUnionWadRepository()
         };
     }
 }
