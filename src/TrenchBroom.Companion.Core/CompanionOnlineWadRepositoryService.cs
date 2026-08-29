@@ -656,10 +656,20 @@ public static class CompanionOnlineWadDownloadService
                     provisionalPath,
                     downloadedPath);
 
-                return await PrepareDownloadedPackageAsync(
-                    downloadedPath,
-                    cacheDirectory,
-                    cancellationToken);
+                CompanionOnlineWadDownloadResult preparedPackage =
+                    await PrepareDownloadedPackageAsync(
+                        downloadedPath,
+                        cacheDirectory,
+                        cancellationToken);
+
+                CompanionCommunityWadRepairOutcome repairOutcome =
+                    CompanionCommunityWadRepairService.ApplyCuratedRepairs(
+                        entry,
+                        preparedPackage,
+                        managedDataRoot,
+                        cacheDirectory);
+
+                return repairOutcome.Package;
             }
 
             throw new InvalidDataException(

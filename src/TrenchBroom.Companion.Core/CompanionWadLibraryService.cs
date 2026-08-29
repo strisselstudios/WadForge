@@ -79,6 +79,9 @@ public sealed class CompanionWadLibraryService
             CopyAliasManifestIfPresent(
                 sourcePath,
                 existingByHash);
+            CopyCommunityProvenanceIfPresent(
+                sourcePath,
+                existingByHash);
 
             CompanionWadLibraryAsset? existingAsset =
                 GetAsset(
@@ -135,6 +138,9 @@ public sealed class CompanionWadLibraryService
             CopyAliasManifestIfPresent(
                 sourcePath,
                 destinationPath);
+            CopyCommunityProvenanceIfPresent(
+                sourcePath,
+                destinationPath);
 
             WadRegistrationResult destinationInspection =
                 WadRegistrationService.Inspect(
@@ -174,6 +180,17 @@ public sealed class CompanionWadLibraryService
             {
                 File.Delete(
                     destinationManifest);
+            }
+
+            string destinationProvenance =
+                destinationPath +
+                CompanionCommunityWadRepairService.ProvenanceSuffix;
+
+            if (File.Exists(
+                    destinationProvenance))
+            {
+                File.Delete(
+                    destinationProvenance);
             }
 
             if (File.Exists(
@@ -376,6 +393,17 @@ public sealed class CompanionWadLibraryService
                 sidecar);
         }
 
+        string communityProvenance =
+            fullPath +
+            CompanionCommunityWadRepairService.ProvenanceSuffix;
+
+        if (File.Exists(
+                communityProvenance))
+        {
+            File.Delete(
+                communityProvenance);
+        }
+
         if (File.Exists(
                 fullPath))
         {
@@ -561,6 +589,30 @@ public sealed class CompanionWadLibraryService
         File.Copy(
             sourceManifest,
             destinationManifest,
+            overwrite: true);
+    }
+
+    private static void CopyCommunityProvenanceIfPresent(
+        string sourceWadPath,
+        string destinationWadPath)
+    {
+        string sourceProvenance =
+            sourceWadPath +
+            CompanionCommunityWadRepairService.ProvenanceSuffix;
+
+        if (!File.Exists(
+                sourceProvenance))
+        {
+            return;
+        }
+
+        string destinationProvenance =
+            destinationWadPath +
+            CompanionCommunityWadRepairService.ProvenanceSuffix;
+
+        File.Copy(
+            sourceProvenance,
+            destinationProvenance,
             overwrite: true);
     }
 
