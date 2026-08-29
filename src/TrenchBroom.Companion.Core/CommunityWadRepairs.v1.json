@@ -1,4 +1,25 @@
 {
-  "schemaVersion": 1,
-  "packages": []
+    "schemaVersion":  1,
+    "packages":  [
+                     {
+                         "ruleId":  "quaddicted-blood-transparent-tile1143-mask-prefix",
+                         "sourceId":  "quaddicted",
+                         "packageSha256":  "7185A84C70088F67344D0CC7E377E60B4FEF64D3B5017023E31C30B92A88035B",
+                         "wads":  [
+                                      {
+                                          "archivePath":  "qb_trans.wad",
+                                          "wadSha256":  "64FFC59B3E953E4251312C23BD55E599BAFF98B8B571469A5FA955AF796FCF9D",
+                                          "textures":  [
+                                                           {
+                                                               "internalName":  "tile1143",
+                                                               "expectedWidth":  128,
+                                                               "expectedHeight":  128,
+                                                               "addMaskPrefix":  true,
+                                                               "remapIndexTo255":  null
+                                                           }
+                                                       ]
+                                      }
+                                  ]
+                     }
+                 ]
 }
