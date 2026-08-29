@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -184,7 +184,7 @@ public sealed class CompanionWadLibraryService
 
             string destinationProvenance =
                 destinationPath +
-                CompanionCommunityWadRepairService.ProvenanceSuffix;
+                CompanionCommunityWadProvenanceService.ProvenanceSuffix;
 
             if (File.Exists(
                     destinationProvenance))
@@ -395,7 +395,7 @@ public sealed class CompanionWadLibraryService
 
         string communityProvenance =
             fullPath +
-            CompanionCommunityWadRepairService.ProvenanceSuffix;
+            CompanionCommunityWadProvenanceService.ProvenanceSuffix;
 
         if (File.Exists(
                 communityProvenance))
@@ -598,7 +598,7 @@ public sealed class CompanionWadLibraryService
     {
         string sourceProvenance =
             sourceWadPath +
-            CompanionCommunityWadRepairService.ProvenanceSuffix;
+            CompanionCommunityWadProvenanceService.ProvenanceSuffix;
 
         if (!File.Exists(
                 sourceProvenance))
@@ -608,7 +608,7 @@ public sealed class CompanionWadLibraryService
 
         string destinationProvenance =
             destinationWadPath +
-            CompanionCommunityWadRepairService.ProvenanceSuffix;
+            CompanionCommunityWadProvenanceService.ProvenanceSuffix;
 
         File.Copy(
             sourceProvenance,

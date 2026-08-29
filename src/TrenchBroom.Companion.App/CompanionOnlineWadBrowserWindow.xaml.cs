@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -459,6 +459,10 @@ public partial class CompanionOnlineWadBrowserWindow :
                 _wadLibraryService.Import(
                     _managedDataRoot,
                     temporaryPath);
+
+            CompanionCommunityWadProvenanceService.WriteIfMissing(
+                result.WadPath,
+                entry);
 
             RememberSourcePalette(
                 entry,

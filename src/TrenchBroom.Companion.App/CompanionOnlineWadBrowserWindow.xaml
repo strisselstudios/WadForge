@@ -1,7 +1,7 @@
-﻿<Window x:Class="TrenchBroom.Companion.App.CompanionOnlineWadBrowserWindow"
+<Window x:Class="TrenchBroom.Companion.App.CompanionOnlineWadBrowserWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Find WADs Online"
+        Title="Browse Community WADs"
         Width="1060"
         Height="700"
         MinWidth="1060"
@@ -164,11 +164,11 @@
             <StackPanel>
                 <TextBlock FontSize="26"
                            FontWeight="Bold"
-                           Text="Find WADs Online" />
+                           Text="Browse Community WADs" />
                 <TextBlock Margin="0,5,0,0"
                            Foreground="{StaticResource SecondaryTextBrush}"
                            FontSize="13"
-                           Text="Browse supported repositories, preview the real archive, then add it to the global Companion library." />
+                           Text="Browse supported repositories, preview the original WAD, then add it unchanged to the global Companion library." />
             </StackPanel>
 
             <Button Grid.Column="1"
@@ -256,6 +256,21 @@
                                    Foreground="{StaticResource SecondaryTextBrush}"
                                    FontSize="11"
                                    TextWrapping="Wrap" />
+                        <Expander Margin="0,10,0,0"
+                                  Foreground="{StaticResource AccentBrush}"
+                                  Header="Transparency &amp; editing">
+                            <Border Margin="0,6,0,0"
+                                    Padding="10"
+                                    Background="#111820"
+                                    BorderBrush="#344252"
+                                    BorderThickness="1"
+                                    CornerRadius="5">
+                                <TextBlock Foreground="{StaticResource SecondaryTextBrush}"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Text="Community WADs are kept unchanged. If a masked texture shows a solid background, add the WAD to your library and choose Edit in WadForge. In Texture Editor, add or remove the &#123; mask prefix as needed. If the intended background uses another palette index, use the remap-to-255 option and preview the result. Use Save Copy to preserve the original library WAD." />
+                            </Border>
+                        </Expander>
                     </StackPanel>
 
                     <Grid Grid.Row="2">

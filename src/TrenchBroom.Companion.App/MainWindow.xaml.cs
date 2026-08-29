@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
 using System.Diagnostics;
@@ -1611,6 +1611,70 @@ public partial class MainWindow : Window
 
         BrowseWadButton.IsEnabled =
             selectedCount == 1;
+
+        EditWadButton.IsEnabled =
+            selectedCount == 1;
+    }
+    private void EditSelectedWad_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (RegistrationGrid.SelectedItem is not
+            WadRegistrationResult selected)
+        {
+            return;
+        }
+
+        if (!File.Exists(
+                selected.WadPath))
+        {
+            MessageBox.Show(
+                this,
+                "The selected WAD file no longer exists.",
+                "WAD Missing",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            return;
+        }
+
+        string? wadForgePath =
+            FindWadForgeExecutable();
+
+        if (string.IsNullOrWhiteSpace(
+                wadForgePath))
+        {
+            MessageBox.Show(
+                this,
+                "WadForge could not be found in the Companion suite or the current development build.",
+                "WadForge Not Found",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            return;
+        }
+
+        ProcessStartInfo startInfo =
+            new()
+            {
+                FileName =
+                    wadForgePath,
+                WorkingDirectory =
+                    Path.GetDirectoryName(
+                        wadForgePath) ??
+                    Environment.CurrentDirectory,
+                UseShellExecute =
+                    true
+            };
+
+        startInfo.ArgumentList.Add(
+            "--edit-wad");
+
+        startInfo.ArgumentList.Add(
+            selected.WadPath);
+
+        Process.Start(
+            startInfo);
     }
     private void LaunchTrenchBroom_Click(
         object sender,
@@ -1853,6 +1917,9 @@ public partial class MainWindow : Window
             selectedCount > 0;
 
         OpenWadFolderMenuItem.IsEnabled =
+            selectedCount == 1;
+
+        EditWadButton.IsEnabled =
             selectedCount == 1;
     }
 }

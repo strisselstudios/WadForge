@@ -259,6 +259,7 @@ public partial class TextureEditorWindow : Window
         object sender,
         SelectionChangedEventArgs e)
     {
+        UpdateSelectionSummary();
         TextureRow? row =
             TextureList.SelectedItem as
                 TextureRow;
@@ -423,6 +424,7 @@ public partial class TextureEditorWindow : Window
                 false;
         }
 
+        CaptureCurrentEdit();
         RefreshPreview();
     }
 
@@ -435,9 +437,240 @@ public partial class TextureEditorWindow : Window
             return;
         }
 
+        CaptureCurrentEdit();
         RefreshPreview();
     }
 
+    private static bool IsValidDraftName(
+        string name)
+    {
+        return
+            !string.IsNullOrWhiteSpace(
+                name) &&
+            !name.Any(
+                character =>
+                    character >
+                    127) &&
+            System.Text.Encoding.ASCII.GetByteCount(
+                name) <=
+            16;
+    }
+
+    private void CaptureCurrentEdit()
+    {
+        if (_updatingEditorFields ||
+            _document is
+                null ||
+            TextureList.SelectedItem is not
+                TextureRow row)
+        {
+            return;
+        }
+
+        string newName =
+            TextureNameTextBox.Text.Trim();
+
+        if (!IsValidDraftName(
+                newName))
+        {
+            return;
+        }
+
+        int? remap =
+            RemapEdgeCheckBox.IsChecked ==
+                true
+                ? row.Texture.DominantEdgeIndex
+                : null;
+
+        if (remap ==
+            255)
+        {
+            remap =
+                null;
+        }
+
+        bool differsFromStored =
+            !string.Equals(
+                newName,
+                row.Texture.InternalName,
+                StringComparison.Ordinal) ||
+            remap.HasValue;
+
+        if (differsFromStored)
+        {
+            _stagedEdits[
+                row.Texture.DirectoryIndex] =
+                new WadTextureEdit(
+                    row.Texture.DirectoryIndex,
+                    newName,
+                    remap);
+        }
+        else
+        {
+            _stagedEdits.Remove(
+                row.Texture.DirectoryIndex);
+        }
+
+        UnstageEditButton.IsEnabled =
+            _stagedEdits.ContainsKey(
+                row.Texture.DirectoryIndex);
+
+        UpdatePendingUi();
+    }
+
+    private void UpdateSelectionSummary()
+    {
+        int count =
+            TextureList.SelectedItems.Count;
+
+        SelectionSummaryText.Text =
+            count ==
+                1
+                ? "1 selected Â· Ctrl/Shift-click for batch actions"
+                : $"{count:N0} selected Â· Ctrl/Shift-click for batch actions";
+
+        bool enabled =
+            count >
+            0;
+
+        BatchAddMaskButton.IsEnabled =
+            enabled;
+
+        BatchRemoveMaskButton.IsEnabled =
+            enabled;
+    }
+
+    private void BatchAddMask_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ApplyBatchMaskPrefix(
+            addPrefix:
+                true);
+    }
+
+    private void BatchRemoveMask_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ApplyBatchMaskPrefix(
+            addPrefix:
+                false);
+    }
+
+    private void ApplyBatchMaskPrefix(
+        bool addPrefix)
+    {
+        TextureRow[] selected =
+            TextureList.SelectedItems
+                .Cast<TextureRow>()
+                .ToArray();
+
+        if (selected.Length ==
+            0)
+        {
+            return;
+        }
+
+        int[] selectedDirectoryIndexes =
+            selected
+                .Select(
+                    row =>
+                        row.Texture.DirectoryIndex)
+                .ToArray();
+
+        int changed =
+            0;
+
+        int skipped =
+            0;
+
+        foreach (TextureRow row in
+                 selected)
+        {
+            WadTextureEdit? existing =
+                _stagedEdits.TryGetValue(
+                        row.Texture.DirectoryIndex,
+                        out WadTextureEdit? staged)
+                    ? staged
+                    : null;
+
+            string currentName =
+                existing?.NewInternalName ??
+                row.Texture.InternalName;
+
+            string newName =
+                addPrefix
+                    ? currentName.StartsWith(
+                          "{",
+                          StringComparison.Ordinal)
+                        ? currentName
+                        : "{" +
+                          currentName
+                    : currentName.StartsWith(
+                          "{",
+                          StringComparison.Ordinal)
+                        ? currentName[1..]
+                        : currentName;
+
+            if (!IsValidDraftName(
+                    newName))
+            {
+                skipped++;
+                continue;
+            }
+
+            int? remap =
+                existing?.RemapIndexTo255;
+
+            bool differsFromStored =
+                !string.Equals(
+                    newName,
+                    row.Texture.InternalName,
+                    StringComparison.Ordinal) ||
+                remap.HasValue;
+
+            if (differsFromStored)
+            {
+                _stagedEdits[
+                    row.Texture.DirectoryIndex] =
+                    new WadTextureEdit(
+                        row.Texture.DirectoryIndex,
+                        newName,
+                        remap);
+            }
+            else
+            {
+                _stagedEdits.Remove(
+                    row.Texture.DirectoryIndex);
+            }
+
+            changed++;
+        }
+
+        RefreshRows();
+
+        TextureList.SelectedItems.Clear();
+
+        foreach (TextureRow row in
+                 _rows.Where(
+                     candidate =>
+                         selectedDirectoryIndexes.Contains(
+                             candidate.Texture.DirectoryIndex)))
+        {
+            TextureList.SelectedItems.Add(
+                row);
+        }
+
+        UpdatePendingUi();
+        UpdateSelectionSummary();
+
+        StatusText.Text =
+            skipped ==
+                0
+                ? $"{(addPrefix ? "Added" : "Removed")} the mask prefix for {changed:N0} selected texture(s)."
+                : $"{(addPrefix ? "Added" : "Removed")} the mask prefix for {changed:N0} texture(s); skipped {skipped:N0} invalid or overlength name(s).";
+    }
     private void PreviewRepairCheckBox_Changed(
         object sender,
         RoutedEventArgs e)

@@ -1,4 +1,4 @@
-﻿<Window x:Class="TrenchBroom.Companion.App.MainWindow"
+<Window x:Class="TrenchBroom.Companion.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="TrenchBroom Companion by Strissel"
@@ -948,7 +948,7 @@
                                 <TextBlock Margin="0,4,0,0"
                                            Foreground="{StaticResource SecondaryTextBrush}"
                                            TextWrapping="Wrap"
-                                           Text="Import WADs once, then open any archive to browse its textures visually." />
+                                           Text="Import WADs once, then browse or edit textures without silently changing the source WAD." />
                             </StackPanel>
                             <WrapPanel Grid.Column="1"
                                        Margin="24,4,0,4"
@@ -963,6 +963,12 @@
                                         IsEnabled="False"
                                         Click="BrowseSelectedWad_Click"
                                         Content="Browse WAD" />
+                                <Button x:Name="EditWadButton"
+                                        Style="{StaticResource DarkButtonStyle}"
+                                        Margin="0,0,10,10"
+                                        IsEnabled="False"
+                                        Click="EditSelectedWad_Click"
+                                        Content="Edit in WadForge" />
                                 <Button x:Name="WadLibraryMoreButton"
                                         Visibility="Collapsed"
                                         Style="{StaticResource DarkButtonStyle}"

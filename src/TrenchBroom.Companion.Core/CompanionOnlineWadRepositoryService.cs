@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using SharpCompress.Archives;
@@ -662,14 +662,7 @@ public static class CompanionOnlineWadDownloadService
                         cacheDirectory,
                         cancellationToken);
 
-                CompanionCommunityWadRepairOutcome repairOutcome =
-                    CompanionCommunityWadRepairService.ApplyCuratedRepairs(
-                        entry,
-                        preparedPackage,
-                        managedDataRoot,
-                        cacheDirectory);
-
-                return repairOutcome.Package;
+                return preparedPackage;
             }
 
             throw new InvalidDataException(
