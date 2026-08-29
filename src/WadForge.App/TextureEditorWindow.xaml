@@ -1,0 +1,321 @@
+<Window x:Class="WadForge.App.TextureEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WadForge Texture Editor"
+        Width="1240"
+        Height="800"
+        MinWidth="1050"
+        MinHeight="680"
+        WindowStartupLocation="CenterOwner"
+        Background="#12151A"
+        Foreground="#FFFFFF"
+        AllowDrop="True"
+        DragEnter="Window_DragEnter"
+        DragOver="Window_DragEnter"
+        Drop="Window_Drop">
+    <Window.Resources>
+        <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#1D2229" />
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#343C47" />
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#BEC6D1" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#D7A43A" />
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Background" Value="#15191F" />
+            <Setter Property="BorderBrush" Value="#56616E" />
+            <Setter Property="CaretBrush" Value="#FFFFFF" />
+            <Setter Property="SelectionBrush" Value="#8A6827" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <Style x:Key="DarkButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Background" Value="#303842" />
+            <Setter Property="BorderBrush" Value="#56616E" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource DarkButtonStyle}">
+            <Setter Property="Background" Value="#946A18" />
+            <Setter Property="BorderBrush" Value="#D7A43A" />
+        </Style>
+
+        <DrawingBrush x:Key="CheckerBrush"
+                      TileMode="Tile"
+                      Viewport="0,0,18,18"
+                      ViewportUnits="Absolute"
+                      Viewbox="0,0,18,18"
+                      ViewboxUnits="Absolute">
+            <DrawingBrush.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="#8C8C8C">
+                        <GeometryDrawing.Geometry>
+                            <RectangleGeometry Rect="0,0,18,18" />
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <GeometryDrawing Brush="#B3B3B3">
+                        <GeometryDrawing.Geometry>
+                            <GeometryGroup>
+                                <RectangleGeometry Rect="0,0,9,9" />
+                                <RectangleGeometry Rect="9,9,9,9" />
+                            </GeometryGroup>
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                </DrawingGroup>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel>
+                <TextBlock FontSize="30"
+                           FontWeight="Bold"
+                           Text="Texture Editor" />
+                <TextBlock Margin="0,4,0,0"
+                           Foreground="{StaticResource SecondaryTextBrush}"
+                           FontSize="14"
+                           Text="Open or drag in a WAD, preview its textures, rename them, and repair indexed mask backgrounds." />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <Button Style="{StaticResource DarkButtonStyle}"
+                        Click="OpenWad_Click"
+                        Content="Open WAD" />
+                <Button x:Name="ChoosePaletteButton"
+                        Style="{StaticResource DarkButtonStyle}"
+                        Click="ChoosePalette_Click"
+                        Content="WAD2 Palette" />
+                <Button x:Name="SaveCopyButton"
+                        Style="{StaticResource DarkButtonStyle}"
+                        Click="SaveCopy_Click"
+                        Content="Save Copy..."
+                        IsEnabled="False" />
+                <Button x:Name="SaveInPlaceButton"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Margin="0"
+                        Click="SaveInPlace_Click"
+                        Content="Save In Place"
+                        IsEnabled="False" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Padding="12"
+                Background="{StaticResource PanelBackgroundBrush}"
+                BorderBrush="{StaticResource PanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock x:Name="WadPathText"
+                               FontWeight="SemiBold"
+                               Text="Drop a WAD here or choose Open WAD." />
+                    <TextBlock x:Name="WadInfoText"
+                               Margin="0,4,0,0"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               Text="No WAD loaded." />
+                </StackPanel>
+
+                <TextBlock x:Name="PendingText"
+                           Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource AccentBrush}"
+                           FontWeight="SemiBold"
+                           Text="0 staged edits" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="330" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="330" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Padding="12"
+                    Background="{StaticResource PanelBackgroundBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="10" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBox x:Name="SearchTextBox"
+                             TextChanged="SearchTextBox_TextChanged"
+                             ToolTip="Search texture names" />
+
+                    <ListBox x:Name="TextureList"
+                             Grid.Row="2"
+                             Background="#15191F"
+                             BorderBrush="#343C47"
+                             Foreground="#FFFFFF"
+                             SelectionChanged="TextureList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold"
+                                                   Text="{Binding InternalName}" />
+                                        <TextBlock Margin="0,3,0,0"
+                                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                                   FontSize="11"
+                                                   Text="{Binding StatusText}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               Margin="8,0,0,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                               Text="{Binding DimensionsText}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2"
+                    Background="{StaticResource CheckerBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="5">
+                <Grid>
+                    <Image x:Name="PreviewImage"
+                           Margin="18"
+                           Stretch="Uniform"
+                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                    <TextBlock x:Name="PreviewPlaceholder"
+                               Margin="24"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="#2A2E35"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               TextAlignment="Center"
+                               Text="Select a texture to preview it." />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="4"
+                    Padding="14"
+                    Background="{StaticResource PanelBackgroundBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="5">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock FontSize="17"
+                                   FontWeight="SemiBold"
+                                   Text="Selected texture" />
+
+                        <TextBlock Margin="0,14,0,5"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Text="Internal name" />
+                        <TextBox x:Name="TextureNameTextBox"
+                                 TextChanged="EditorField_Changed"
+                                 IsEnabled="False" />
+
+                        <CheckBox x:Name="MaskedCheckBox"
+                                  Margin="0,14,0,0"
+                                  Foreground="#FFFFFF"
+                                  Checked="MaskedCheckBox_Changed"
+                                  Unchecked="MaskedCheckBox_Changed"
+                                  Content="Masked texture ({ prefix)"
+                                  IsEnabled="False" />
+
+                        <CheckBox x:Name="RemapEdgeCheckBox"
+                                  Margin="0,10,0,0"
+                                  Foreground="#FFFFFF"
+                                  Checked="EditorField_Changed"
+                                  Unchecked="EditorField_Changed"
+                                  Content="Remap detected edge index to 255"
+                                  IsEnabled="False" />
+
+                        <CheckBox x:Name="PreviewRepairCheckBox"
+                                  Margin="0,10,0,0"
+                                  Foreground="#FFFFFF"
+                                  Checked="PreviewRepairCheckBox_Changed"
+                                  Unchecked="PreviewRepairCheckBox_Changed"
+                                  Content="Preview staged transparency"
+                                  IsChecked="True"
+                                  IsEnabled="False" />
+
+                        <TextBlock x:Name="TextureDetailsText"
+                                   Margin="0,16,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Select a texture for details." />
+
+                        <Border Margin="0,16,0,16"
+                                BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="0,1,0,0" />
+
+                        <Button x:Name="StageEditButton"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Margin="0"
+                                Click="StageEdit_Click"
+                                Content="Stage Texture Changes"
+                                IsEnabled="False" />
+
+                        <Button x:Name="UnstageEditButton"
+                                Style="{StaticResource DarkButtonStyle}"
+                                Margin="0,8,0,0"
+                                Click="UnstageEdit_Click"
+                                Content="Remove Staged Edit"
+                                IsEnabled="False" />
+
+                        <TextBlock Margin="0,14,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Text="Tip: if a texture already uses palette index 255 for its pink/blue background, checking Masked is enough. If the intended background uses another index, also enable the remap option after visually confirming the preview." />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="6"
+                   Foreground="{StaticResource SecondaryTextBrush}"
+                   Text="Ready." />
+    </Grid>
+</Window>
