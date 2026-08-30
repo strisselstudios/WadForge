@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
@@ -22,13 +23,33 @@ public partial class TextureEditorWindow : Window
     private WadTextureEditorDocument? _document;
     private string? _wad2PalettePath;
     private bool _updatingEditorFields;
-
-    public TextureEditorWindow()
+    private int? _activeTextureDirectoryIndex;
+    private bool _restoringTextureSelection;
+    private readonly Dictionary<int, PixelEditState> _pixelStates =
+        new();
+    private PixelTool _pixelTool =
+        PixelTool.Pencil;
+    private int _selectedPaletteIndex;
+    private bool _pixelStrokeActive;
+    private int? _lastPaintX;
+    private int? _lastPaintY;
+    private double _previewZoom =
+        1.0;
+    private int? _zoomTextureDirectoryIndex;
+    private const double MinimumPreviewZoom =
+        0.25;
+    private const double MaximumPreviewZoom =
+        32.0;    public TextureEditorWindow()
     {
         InitializeComponent();
 
         TextureList.ItemsSource =
             _rows;
+
+        PaletteComboBox.SelectedIndex =
+            0;
+
+        UpdatePixelToolButtons();
     }
 
     public void OpenWad(
@@ -66,7 +87,45 @@ public partial class TextureEditorWindow : Window
         }
     }
 
-    private void ChoosePalette_Click(
+    private void PaletteComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (PaletteComboBox.SelectedItem is not
+                ComboBoxItem item ||
+            item.Tag is not
+                string tag)
+        {
+            return;
+        }
+
+        if (string.Equals(
+                tag,
+                "quake",
+                StringComparison.Ordinal))
+        {
+            _wad2PalettePath =
+                null;
+        }
+        else
+        {
+            _wad2PalettePath =
+                tag;
+        }
+
+        if (_document is not
+                null &&
+            _document.Format ==
+                WadFormat.Wad2)
+        {
+            LoadWad(
+                _document.WadPath,
+                preserveStagedEdits:
+                    true);
+        }
+    }
+
+    private void AddPalette_Click(
         object sender,
         RoutedEventArgs e)
     {
@@ -74,7 +133,7 @@ public partial class TextureEditorWindow : Window
             new()
             {
                 Title =
-                    "Choose a WAD2 palette",
+                    "Add a custom WAD2 palette",
                 Filter =
                     "Palette files|*.lmp;*.pal|All files|*.*",
                 Multiselect =
@@ -84,16 +143,6 @@ public partial class TextureEditorWindow : Window
                 CheckPathExists =
                     true
             };
-
-        if (!string.IsNullOrWhiteSpace(
-                _wad2PalettePath) &&
-            File.Exists(
-                _wad2PalettePath))
-        {
-            dialog.InitialDirectory =
-                Path.GetDirectoryName(
-                    _wad2PalettePath);
-        }
 
         if (dialog.ShowDialog(
                 this) !=
@@ -108,29 +157,61 @@ public partial class TextureEditorWindow : Window
                 PaletteFile.Load(
                     dialog.FileName);
 
-            _wad2PalettePath =
-                dialog.FileName;
+            string fullPath =
+                Path.GetFullPath(
+                    dialog.FileName);
 
-            if (_document is
-                not null)
+            ComboBoxItem? existing =
+                PaletteComboBox.Items
+                    .OfType<ComboBoxItem>()
+                    .FirstOrDefault(
+                        candidate =>
+                            candidate.Tag is
+                                string candidateTag &&
+                            string.Equals(
+                                candidateTag,
+                                fullPath,
+                                StringComparison.OrdinalIgnoreCase));
+
+            ComboBoxItem item =
+                existing ??
+                new ComboBoxItem
+                {
+                    Tag =
+                        fullPath,
+                    Content =
+                        Path.GetFileName(
+                            fullPath),
+                    Foreground =
+                        Brushes.White,
+                    Background =
+                        new SolidColorBrush(
+                            Color.FromRgb(
+                                48,
+                                56,
+                                66))
+                };
+
+            if (existing is
+                null)
             {
-                LoadWad(
-                    _document.WadPath,
-                    preserveStagedEdits:
-                        true);
+                PaletteComboBox.Items.Add(
+                    item);
             }
+
+            PaletteComboBox.SelectedItem =
+                item;
         }
         catch (Exception exception)
         {
             MessageBox.Show(
                 this,
                 exception.Message,
-                "WAD2 Palette",
+                "Custom WAD2 Palette",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
     }
-
     private void LoadWad(
         string wadPath,
         bool preserveStagedEdits = false)
@@ -147,20 +228,53 @@ public partial class TextureEditorWindow : Window
                 _stagedEdits.Clear();
             }
 
+            _pixelStates.Clear();
+
             _document =
                 document;
+
+            _activeTextureDirectoryIndex =
+                null;
 
             WadPathText.Text =
                 document.WadPath;
 
+            string paletteLabel =
+                string.IsNullOrWhiteSpace(
+                    _wad2PalettePath)
+                    ? "Quake (default)"
+                    : Path.GetFileName(
+                        _wad2PalettePath);
+
             WadInfoText.Text =
-                $"{document.Format.ToString().ToUpperInvariant()} · {document.Textures.Count:N0} textures" +
+                $"{document.Format.ToString().ToUpperInvariant()} | {document.Textures.Count:N0} textures" +
                 (document.Format ==
-                     WadFormat.Wad2 &&
-                 string.IsNullOrWhiteSpace(
-                     _wad2PalettePath)
-                    ? " · choose a WAD2 palette for color previews"
-                    : string.Empty);
+                     WadFormat.Wad2
+                    ? " | palette: " +
+                      paletteLabel
+                    : " | embedded texture palettes");
+
+            bool wad2 =
+                document.Format ==
+                WadFormat.Wad2;
+
+            PalettePanel.Visibility =
+                wad2
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            AddPaletteButton.Visibility =
+                wad2
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            if (wad2 &&
+                string.IsNullOrWhiteSpace(
+                    _wad2PalettePath))
+            {
+                PaletteComboBox.SelectedIndex =
+                    0;
+            }
 
             RefreshRows();
 
@@ -185,7 +299,6 @@ public partial class TextureEditorWindow : Window
                 MessageBoxImage.Warning);
         }
     }
-
     private void RefreshRows()
     {
         _rows.Clear();
@@ -238,31 +351,146 @@ public partial class TextureEditorWindow : Window
         object sender,
         TextChangedEventArgs e)
     {
-        int? selectedDirectoryIndex =
-            (TextureList.SelectedItem as TextureRow)?
-                .Texture
-                .DirectoryIndex;
+        int[] selectedDirectoryIndexes =
+            TextureList.SelectedItems
+                .Cast<TextureRow>()
+                .Select(
+                    row =>
+                        row.Texture.DirectoryIndex)
+                .ToArray();
 
-        RefreshRows();
+        int? activeDirectoryIndex =
+            _activeTextureDirectoryIndex;
 
-        if (selectedDirectoryIndex.HasValue)
+        RefreshRowsPreservingSelection(
+            selectedDirectoryIndexes,
+            activeDirectoryIndex);
+    }
+
+    private TextureRow? GetActiveTextureRow()
+    {
+        if (_activeTextureDirectoryIndex.HasValue)
         {
-            TextureList.SelectedItem =
+            TextureRow? active =
                 _rows.FirstOrDefault(
                     row =>
                         row.Texture.DirectoryIndex ==
-                        selectedDirectoryIndex.Value);
+                        _activeTextureDirectoryIndex.Value);
+
+            if (active is not
+                    null &&
+                TextureList.SelectedItems.Contains(
+                    active))
+            {
+                return active;
+            }
         }
+
+        return TextureList.SelectedItem as
+            TextureRow;
     }
 
+    private void RefreshRowsPreservingSelection(
+        IReadOnlyCollection<int> selectedDirectoryIndexes,
+        int? activeDirectoryIndex)
+    {
+        _restoringTextureSelection =
+            true;
+
+        try
+        {
+            RefreshRows();
+
+            TextureList.SelectedItems.Clear();
+
+            foreach (TextureRow row in
+                     _rows.Where(
+                         candidate =>
+                             selectedDirectoryIndexes.Contains(
+                                 candidate.Texture.DirectoryIndex) &&
+                             candidate.Texture.DirectoryIndex !=
+                                 activeDirectoryIndex))
+            {
+                TextureList.SelectedItems.Add(
+                    row);
+            }
+
+            if (activeDirectoryIndex.HasValue)
+            {
+                TextureRow? active =
+                    _rows.FirstOrDefault(
+                        row =>
+                            row.Texture.DirectoryIndex ==
+                            activeDirectoryIndex.Value &&
+                            selectedDirectoryIndexes.Contains(
+                                row.Texture.DirectoryIndex));
+
+                if (active is not
+                    null)
+                {
+                    TextureList.SelectedItems.Add(
+                        active);
+                }
+            }
+        }
+        finally
+        {
+            _restoringTextureSelection =
+                false;
+        }
+
+        TextureRow? restoredActive =
+            GetActiveTextureRow() ??
+            TextureList.SelectedItems
+                .OfType<TextureRow>()
+                .LastOrDefault();
+
+        _activeTextureDirectoryIndex =
+            restoredActive?
+                .Texture
+                .DirectoryIndex;
+
+        UpdateSelectionSummary();
+
+        ShowTexture(
+            restoredActive);
+    }
     private void TextureList_SelectionChanged(
         object sender,
         SelectionChangedEventArgs e)
     {
         UpdateSelectionSummary();
+
+        if (_restoringTextureSelection)
+        {
+            return;
+        }
+
         TextureRow? row =
+            e.AddedItems
+                .OfType<TextureRow>()
+                .LastOrDefault() ??
+            GetActiveTextureRow() ??
             TextureList.SelectedItem as
                 TextureRow;
+
+        _activeTextureDirectoryIndex =
+            row?
+                .Texture
+                .DirectoryIndex;
+
+        ShowTexture(
+            row);
+    }
+
+    private void ShowTexture(
+        TextureRow? row)
+    {
+        bool fitNewTexture =
+            row is not
+                null &&
+            _zoomTextureDirectoryIndex !=
+                row.Texture.DirectoryIndex;
 
         _updatingEditorFields =
             true;
@@ -272,6 +500,9 @@ public partial class TextureEditorWindow : Window
             if (row is
                 null)
             {
+                _zoomTextureDirectoryIndex =
+                    null;
+
                 TextureNameTextBox.Text =
                     string.Empty;
 
@@ -293,6 +524,9 @@ public partial class TextureEditorWindow : Window
                 UnstageEditButton.IsEnabled =
                     false;
 
+                PixelToolsPanel.IsEnabled =
+                    false;
+
                 TextureDetailsText.Text =
                     "Select a texture for details.";
 
@@ -302,8 +536,13 @@ public partial class TextureEditorWindow : Window
                 PreviewPlaceholder.Visibility =
                     Visibility.Visible;
 
+                PaletteGrid.Children.Clear();
+
                 return;
             }
+
+            _zoomTextureDirectoryIndex =
+                row.Texture.DirectoryIndex;
 
             WadTextureEditorTexture texture =
                 row.Texture;
@@ -334,8 +573,12 @@ public partial class TextureEditorWindow : Window
                     StringComparison.Ordinal);
 
             RemapEdgeCheckBox.IsEnabled =
-                texture.DominantEdgeIndex !=
-                255;
+                TextureList.SelectedItems
+                    .OfType<TextureRow>()
+                    .Any(
+                        selectedRow =>
+                            selectedRow.Texture.DominantEdgeIndex !=
+                            255);
 
             RemapEdgeCheckBox.IsChecked =
                 staged?.RemapIndexTo255
@@ -351,6 +594,9 @@ public partial class TextureEditorWindow : Window
             UnstageEditButton.IsEnabled =
                 staged is not
                 null;
+
+            PixelToolsPanel.IsEnabled =
+                true;
 
             TextureDetailsText.Text =
                 $"{texture.Width} x {texture.Height}" +
@@ -373,61 +619,38 @@ public partial class TextureEditorWindow : Window
                 false;
         }
 
-        RefreshPreview();
-    }
+        PixelEditState state =
+            EnsurePixelState(
+                row);
 
+        RefreshPaletteGrid(
+            state.Palette);
+
+        UpdateUndoRedoButtons(
+            state);
+
+        RefreshPreview();
+
+        if (fitNewTexture)
+        {
+            Dispatcher.BeginInvoke(
+                new Action(
+                    FitPreviewToViewport));
+        }
+    }
     private void MaskedCheckBox_Changed(
         object sender,
         RoutedEventArgs e)
     {
-        if (_updatingEditorFields ||
-            TextureList.SelectedItem is not
-                TextureRow)
+        if (_updatingEditorFields)
         {
             return;
         }
 
-        _updatingEditorFields =
-            true;
-
-        try
-        {
-            string current =
-                TextureNameTextBox.Text.Trim();
-
-            if (MaskedCheckBox.IsChecked ==
-                true)
-            {
-                if (!current.StartsWith(
-                        "{",
-                        StringComparison.Ordinal))
-                {
-                    TextureNameTextBox.Text =
-                        "{" +
-                        current;
-                }
-            }
-            else
-            {
-                if (current.StartsWith(
-                        "{",
-                        StringComparison.Ordinal))
-                {
-                    TextureNameTextBox.Text =
-                        current[1..];
-                }
-            }
-        }
-        finally
-        {
-            _updatingEditorFields =
-                false;
-        }
-
-        CaptureCurrentEdit();
-        RefreshPreview();
+        ApplyMaskedStateToSelection(
+            MaskedCheckBox.IsChecked ==
+            true);
     }
-
     private void EditorField_Changed(
         object sender,
         RoutedEventArgs e)
@@ -437,10 +660,21 @@ public partial class TextureEditorWindow : Window
             return;
         }
 
+        if (ReferenceEquals(
+                sender,
+                RemapEdgeCheckBox))
+        {
+            ApplyRemapStateToSelection(
+                RemapEdgeCheckBox.IsChecked ==
+                true);
+
+            return;
+        }
+
         CaptureCurrentEdit();
+
         RefreshPreview();
     }
-
     private static bool IsValidDraftName(
         string name)
     {
@@ -461,7 +695,7 @@ public partial class TextureEditorWindow : Window
         if (_updatingEditorFields ||
             _document is
                 null ||
-            TextureList.SelectedItem is not
+            GetActiveTextureRow() is not
                 TextureRow row)
         {
             return;
@@ -489,27 +723,12 @@ public partial class TextureEditorWindow : Window
                 null;
         }
 
-        bool differsFromStored =
-            !string.Equals(
-                newName,
-                row.Texture.InternalName,
-                StringComparison.Ordinal) ||
-            remap.HasValue;
-
-        if (differsFromStored)
-        {
-            _stagedEdits[
-                row.Texture.DirectoryIndex] =
-                new WadTextureEdit(
-                    row.Texture.DirectoryIndex,
-                    newName,
-                    remap);
-        }
-        else
-        {
-            _stagedEdits.Remove(
-                row.Texture.DirectoryIndex);
-        }
+        SetStagedTextureEdit(
+            row,
+            newName,
+            remap,
+            GetEditedPixelsForRow(
+                row));
 
         UnstageEditButton.IsEnabled =
             _stagedEdits.ContainsKey(
@@ -517,7 +736,6 @@ public partial class TextureEditorWindow : Window
 
         UpdatePendingUi();
     }
-
     private void UpdateSelectionSummary()
     {
         int count =
@@ -525,9 +743,12 @@ public partial class TextureEditorWindow : Window
 
         SelectionSummaryText.Text =
             count ==
-                1
-                ? "1 selected Â· Ctrl/Shift-click for batch actions"
-                : $"{count:N0} selected Â· Ctrl/Shift-click for batch actions";
+                0
+                ? "0 selected - Ctrl/Shift-click for batch actions"
+                : count ==
+                    1
+                    ? "1 selected - Ctrl/Shift-click for batch actions"
+                    : $"{count:N0} selected - checkbox edits apply to all";
 
         bool enabled =
             count >
@@ -539,7 +760,6 @@ public partial class TextureEditorWindow : Window
         BatchRemoveMaskButton.IsEnabled =
             enabled;
     }
-
     private void BatchAddMask_Click(
         object sender,
         RoutedEventArgs e)
@@ -561,6 +781,12 @@ public partial class TextureEditorWindow : Window
     private void ApplyBatchMaskPrefix(
         bool addPrefix)
     {
+        ApplyMaskedStateToSelection(
+            addPrefix);
+    }
+    private void ApplyMaskedStateToSelection(
+        bool masked)
+    {
         TextureRow[] selected =
             TextureList.SelectedItems
                 .Cast<TextureRow>()
@@ -579,6 +805,9 @@ public partial class TextureEditorWindow : Window
                         row.Texture.DirectoryIndex)
                 .ToArray();
 
+        int? activeDirectoryIndex =
+            _activeTextureDirectoryIndex;
+
         int changed =
             0;
 
@@ -591,8 +820,8 @@ public partial class TextureEditorWindow : Window
             WadTextureEdit? existing =
                 _stagedEdits.TryGetValue(
                         row.Texture.DirectoryIndex,
-                        out WadTextureEdit? staged)
-                    ? staged
+                        out WadTextureEdit? pending)
+                    ? pending
                     : null;
 
             string currentName =
@@ -600,7 +829,7 @@ public partial class TextureEditorWindow : Window
                 row.Texture.InternalName;
 
             string newName =
-                addPrefix
+                masked
                     ? currentName.StartsWith(
                           "{",
                           StringComparison.Ordinal)
@@ -617,59 +846,1268 @@ public partial class TextureEditorWindow : Window
                     newName))
             {
                 skipped++;
+
                 continue;
             }
 
-            int? remap =
-                existing?.RemapIndexTo255;
-
-            bool differsFromStored =
-                !string.Equals(
-                    newName,
-                    row.Texture.InternalName,
-                    StringComparison.Ordinal) ||
-                remap.HasValue;
-
-            if (differsFromStored)
-            {
-                _stagedEdits[
-                    row.Texture.DirectoryIndex] =
-                    new WadTextureEdit(
-                        row.Texture.DirectoryIndex,
-                        newName,
-                        remap);
-            }
-            else
-            {
-                _stagedEdits.Remove(
-                    row.Texture.DirectoryIndex);
-            }
+            SetStagedTextureEdit(
+                row,
+                newName,
+                existing?.RemapIndexTo255,
+                GetEditedPixelsForRow(
+                    row));
 
             changed++;
         }
 
-        RefreshRows();
-
-        TextureList.SelectedItems.Clear();
-
-        foreach (TextureRow row in
-                 _rows.Where(
-                     candidate =>
-                         selectedDirectoryIndexes.Contains(
-                             candidate.Texture.DirectoryIndex)))
-        {
-            TextureList.SelectedItems.Add(
-                row);
-        }
+        RefreshRowsPreservingSelection(
+            selectedDirectoryIndexes,
+            activeDirectoryIndex);
 
         UpdatePendingUi();
-        UpdateSelectionSummary();
 
         StatusText.Text =
             skipped ==
                 0
-                ? $"{(addPrefix ? "Added" : "Removed")} the mask prefix for {changed:N0} selected texture(s)."
-                : $"{(addPrefix ? "Added" : "Removed")} the mask prefix for {changed:N0} texture(s); skipped {skipped:N0} invalid or overlength name(s).";
+                ? $"Masked state applied to {changed:N0} selected texture(s)."
+                : $"Masked state applied to {changed:N0} texture(s); skipped {skipped:N0} invalid or overlength name(s).";
+    }
+
+    private void ApplyRemapStateToSelection(
+        bool remapTo255)
+    {
+        TextureRow[] selected =
+            TextureList.SelectedItems
+                .Cast<TextureRow>()
+                .ToArray();
+
+        if (selected.Length ==
+            0)
+        {
+            return;
+        }
+
+        int[] selectedDirectoryIndexes =
+            selected
+                .Select(
+                    row =>
+                        row.Texture.DirectoryIndex)
+                .ToArray();
+
+        int? activeDirectoryIndex =
+            _activeTextureDirectoryIndex;
+
+        int changed =
+            0;
+
+        foreach (TextureRow row in
+                 selected)
+        {
+            WadTextureEdit? existing =
+                _stagedEdits.TryGetValue(
+                        row.Texture.DirectoryIndex,
+                        out WadTextureEdit? pending)
+                    ? pending
+                    : null;
+
+            string currentName =
+                existing?.NewInternalName ??
+                row.Texture.InternalName;
+
+            int? remap =
+                remapTo255 &&
+                row.Texture.DominantEdgeIndex !=
+                    255
+                    ? row.Texture.DominantEdgeIndex
+                    : null;
+
+            SetStagedTextureEdit(
+                row,
+                currentName,
+                remap,
+                GetEditedPixelsForRow(
+                    row));
+
+            changed++;
+        }
+
+        RefreshRowsPreservingSelection(
+            selectedDirectoryIndexes,
+            activeDirectoryIndex);
+
+        UpdatePendingUi();
+
+        StatusText.Text =
+            remapTo255
+                ? $"Remap to 255 staged for {changed:N0} selected texture(s)."
+                : $"Remap to 255 cleared for {changed:N0} selected texture(s).";
+    }
+
+    private void SetStagedTextureEdit(
+        TextureRow row,
+        string newName,
+        int? remapIndexTo255,
+        byte[]? editedPixels)
+    {
+        if (remapIndexTo255 ==
+            255)
+        {
+            remapIndexTo255 =
+                null;
+        }
+
+        byte[]? storedPixels =
+            editedPixels;
+
+        if (_pixelStates.TryGetValue(
+                row.Texture.DirectoryIndex,
+                out PixelEditState? state) &&
+            state.Pixels.SequenceEqual(
+                state.OriginalPixels))
+        {
+            storedPixels =
+                null;
+        }
+
+        bool differsFromStored =
+            !string.Equals(
+                newName,
+                row.Texture.InternalName,
+                StringComparison.Ordinal) ||
+            remapIndexTo255.HasValue ||
+            storedPixels is not
+                null;
+
+        if (differsFromStored)
+        {
+            _stagedEdits[
+                row.Texture.DirectoryIndex] =
+                new WadTextureEdit(
+                    row.Texture.DirectoryIndex,
+                    newName,
+                    remapIndexTo255,
+                    storedPixels?
+                        .ToArray());
+        }
+        else
+        {
+            _stagedEdits.Remove(
+                row.Texture.DirectoryIndex);
+        }
+    }
+
+    private byte[]? GetEditedPixelsForRow(
+        TextureRow row)
+    {
+        if (_pixelStates.TryGetValue(
+                row.Texture.DirectoryIndex,
+                out PixelEditState? state))
+        {
+            return state.Pixels.SequenceEqual(
+                    state.OriginalPixels)
+                ? null
+                : state.Pixels;
+        }
+
+        return _stagedEdits.TryGetValue(
+                row.Texture.DirectoryIndex,
+                out WadTextureEdit? staged)
+            ? staged.EditedMip0Pixels
+            : null;
+    }
+
+    private PixelEditState EnsurePixelState(
+        TextureRow row)
+    {
+        if (_pixelStates.TryGetValue(
+                row.Texture.DirectoryIndex,
+                out PixelEditState? existing))
+        {
+            return existing;
+        }
+
+        if (_document is
+            null)
+        {
+            throw new InvalidOperationException(
+                "No WAD is loaded.");
+        }
+
+        WadIndexedTextureData data =
+            WadTextureEditorService.ReadIndexedTexture(
+                _document.WadPath,
+                row.Texture.DirectoryIndex,
+                _wad2PalettePath);
+
+        byte[] currentPixels =
+            _stagedEdits.TryGetValue(
+                    row.Texture.DirectoryIndex,
+                    out WadTextureEdit? staged) &&
+                staged.EditedMip0Pixels is not
+                    null
+                ? staged.EditedMip0Pixels.ToArray()
+                : data.Pixels.ToArray();
+
+        if (currentPixels.Length !=
+            data.Pixels.Length)
+        {
+            throw new InvalidOperationException(
+                "The staged pixel buffer no longer matches this texture.");
+        }
+
+        PixelEditState state =
+            new(
+                data.Width,
+                data.Height,
+                data.Pixels.ToArray(),
+                currentPixels,
+                data.Palette);
+
+        _pixelStates[
+            row.Texture.DirectoryIndex] =
+            state;
+
+        return state;
+    }
+
+    private void RefreshPaletteGrid(
+        IReadOnlyList<Rgb24> palette)
+    {
+        PaletteGrid.Children.Clear();
+
+        for (int index = 0;
+             index <
+                 256;
+             index++)
+        {
+            Rgb24 color =
+                palette[index];
+
+            Button button =
+                new()
+                {
+                    Tag =
+                        index,
+                    MinWidth =
+                        13,
+                    MinHeight =
+                        13,
+                    Padding =
+                        new Thickness(
+                            0),
+                    Margin =
+                        new Thickness(
+                            0.5),
+                    BorderBrush =
+                        index ==
+                            _selectedPaletteIndex
+                            ? Brushes.White
+                            : Brushes.DimGray,
+                    BorderThickness =
+                        index ==
+                            _selectedPaletteIndex
+                            ? new Thickness(
+                                2)
+                            : new Thickness(
+                                0.5),
+                    Background =
+                        new SolidColorBrush(
+                            Color.FromRgb(
+                                color.R,
+                                color.G,
+                                color.B)),
+                    ToolTip =
+                        index ==
+                            255
+                            ? "Index 255 - transparency when masked"
+                            : $"Index {index} - RGB {color.R}, {color.G}, {color.B}"
+                };
+
+            button.Click +=
+                PaletteIndexButton_Click;
+
+            PaletteGrid.Children.Add(
+                button);
+        }
+
+        UpdateSelectedPaletteDisplay(
+            palette);
+    }
+
+    private void PaletteIndexButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not
+                Button button ||
+            button.Tag is not
+                int index ||
+            GetActiveTextureRow() is not
+                TextureRow row)
+        {
+            return;
+        }
+
+        _selectedPaletteIndex =
+            index;
+
+        RefreshPaletteGrid(
+            EnsurePixelState(
+                row).Palette);
+    }
+
+    private void UpdateSelectedPaletteDisplay(
+        IReadOnlyList<Rgb24> palette)
+    {
+        Rgb24 color =
+            palette[
+                _selectedPaletteIndex];
+
+        SelectedPaletteSwatch.Background =
+            new SolidColorBrush(
+                Color.FromRgb(
+                    color.R,
+                    color.G,
+                    color.B));
+
+        SelectedPaletteIndexText.Text =
+            _selectedPaletteIndex ==
+                255
+                ? "Index 255 - transparency"
+                : $"Index {_selectedPaletteIndex} - RGB {color.R}, {color.G}, {color.B}";
+    }
+
+    private void PencilTool_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        SetPixelTool(
+            PixelTool.Pencil);
+    }
+
+    private void FillTool_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        SetPixelTool(
+            PixelTool.Fill);
+    }
+
+    private void EyedropperTool_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        SetPixelTool(
+            PixelTool.Eyedropper);
+    }
+
+    private void TransparencyTool_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        _selectedPaletteIndex =
+            255;
+
+        SetPixelTool(
+            PixelTool.Pencil);
+
+        if (GetActiveTextureRow() is
+            TextureRow row)
+        {
+            RefreshPaletteGrid(
+                EnsurePixelState(
+                    row).Palette);
+        }
+
+        StatusText.Text =
+            "Transparency selected: painting writes palette index 255.";
+    }
+
+    private void SetPixelTool(
+        PixelTool tool)
+    {
+        _pixelTool =
+            tool;
+
+        UpdatePixelToolButtons();
+    }
+
+    private void UpdatePixelToolButtons()
+    {
+        foreach (Button button in
+                 new[]
+                 {
+                     PencilToolButton,
+                     FillToolButton,
+                     EyedropperToolButton
+                 })
+        {
+            button.ClearValue(
+                Button.BackgroundProperty);
+        }
+
+        Button active =
+            _pixelTool switch
+            {
+                PixelTool.Fill =>
+                    FillToolButton,
+                PixelTool.Eyedropper =>
+                    EyedropperToolButton,
+                _ =>
+                    PencilToolButton
+            };
+
+        active.Background =
+            new SolidColorBrush(
+                Color.FromRgb(
+                    148,
+                    106,
+                    24));
+    }
+
+    private int GetBrushSize()
+    {
+        if (BrushSizeComboBox.SelectedItem is
+                ComboBoxItem item &&
+            int.TryParse(
+                item.Tag?.ToString(),
+                out int size))
+        {
+            return size;
+        }
+
+        return 1;
+    }
+
+    private void ZoomOut_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ZoomPreviewBy(
+            1.0 /
+            1.25);
+    }
+
+    private void ZoomIn_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ZoomPreviewBy(
+            1.25);
+    }
+
+    private void ZoomFit_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        FitPreviewToViewport();
+    }
+
+    private void ZoomActual_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        SetPreviewZoom(
+            1.0,
+            "1:1");
+    }
+
+    private void PreviewScrollViewer_PreviewMouseWheel(
+        object sender,
+        MouseWheelEventArgs e)
+    {
+        if (GetActiveTextureRow() is
+            null)
+        {
+            return;
+        }
+
+        ZoomPreviewBy(
+            e.Delta >
+                0
+                ? 1.25
+                : 1.0 /
+                  1.25);
+
+        e.Handled =
+            true;
+    }
+
+    private void ZoomPreviewBy(
+        double factor)
+    {
+        double oldExtentWidth =
+            Math.Max(
+                1,
+                PreviewScrollViewer.ExtentWidth);
+
+        double oldExtentHeight =
+            Math.Max(
+                1,
+                PreviewScrollViewer.ExtentHeight);
+
+        double centerRatioX =
+            (PreviewScrollViewer.HorizontalOffset +
+             (PreviewScrollViewer.ViewportWidth /
+              2)) /
+            oldExtentWidth;
+
+        double centerRatioY =
+            (PreviewScrollViewer.VerticalOffset +
+             (PreviewScrollViewer.ViewportHeight /
+              2)) /
+            oldExtentHeight;
+
+        SetPreviewZoom(
+            _previewZoom *
+            factor);
+
+        Dispatcher.BeginInvoke(
+            new Action(
+                () =>
+                {
+                    double targetX =
+                        (centerRatioX *
+                         PreviewScrollViewer.ExtentWidth) -
+                        (PreviewScrollViewer.ViewportWidth /
+                         2);
+
+                    double targetY =
+                        (centerRatioY *
+                         PreviewScrollViewer.ExtentHeight) -
+                        (PreviewScrollViewer.ViewportHeight /
+                         2);
+
+                    PreviewScrollViewer.ScrollToHorizontalOffset(
+                        Math.Max(
+                            0,
+                            targetX));
+
+                    PreviewScrollViewer.ScrollToVerticalOffset(
+                        Math.Max(
+                            0,
+                            targetY));
+                }));
+    }
+
+    private void FitPreviewToViewport()
+    {
+        if (GetActiveTextureRow() is not
+                TextureRow row)
+        {
+            return;
+        }
+
+        PixelEditState state =
+            EnsurePixelState(
+                row);
+
+        double availableWidth =
+            Math.Max(
+                1,
+                PreviewScrollViewer.ViewportWidth -
+                38);
+
+        double availableHeight =
+            Math.Max(
+                1,
+                PreviewScrollViewer.ViewportHeight -
+                38);
+
+        double zoom =
+            Math.Min(
+                availableWidth /
+                    state.Width,
+                availableHeight /
+                    state.Height);
+
+        SetPreviewZoom(
+            zoom,
+            "Fit");
+
+        Dispatcher.BeginInvoke(
+            new Action(
+                () =>
+                {
+                    PreviewScrollViewer.ScrollToHorizontalOffset(
+                        0);
+
+                    PreviewScrollViewer.ScrollToVerticalOffset(
+                        0);
+                }));
+    }
+
+    private void SetPreviewZoom(
+        double zoom,
+        string? label = null)
+    {
+        _previewZoom =
+            Math.Clamp(
+                zoom,
+                MinimumPreviewZoom,
+                MaximumPreviewZoom);
+
+        PreviewScaleTransform.ScaleX =
+            _previewZoom;
+
+        PreviewScaleTransform.ScaleY =
+            _previewZoom;
+
+        ZoomText.Text =
+            label ??
+            $"{_previewZoom:0.##}x";
+    }
+    private void PreviewImage_MouseLeftButtonDown(
+        object sender,
+        MouseButtonEventArgs e)
+    {
+        if (GetActiveTextureRow() is not
+                TextureRow row)
+        {
+            return;
+        }
+
+        PixelEditState state =
+            EnsurePixelState(
+                row);
+
+        if (!TryGetTexturePixel(
+                e,
+                state,
+                out int x,
+                out int y))
+        {
+            return;
+        }
+
+        if (_pixelTool ==
+            PixelTool.Eyedropper)
+        {
+            _selectedPaletteIndex =
+                state.Pixels[
+                    (y *
+                     state.Width) +
+                    x];
+
+            RefreshPaletteGrid(
+                state.Palette);
+
+            StatusText.Text =
+                $"Picked palette index {_selectedPaletteIndex}.";
+
+            e.Handled =
+                true;
+
+            return;
+        }
+
+        if (_selectedPaletteIndex ==
+                255 &&
+            !TryEnsureActiveTextureMasked(
+                row))
+        {
+            e.Handled =
+                true;
+
+            return;
+        }
+
+        BeginPixelOperation(
+            state);
+
+        if (_pixelTool ==
+            PixelTool.Fill)
+        {
+            FloodFill(
+                state,
+                x,
+                y,
+                (byte)_selectedPaletteIndex);
+
+            CompletePixelOperation(
+                row,
+                state);
+
+            e.Handled =
+                true;
+
+            return;
+        }
+
+        _pixelStrokeActive =
+            true;
+
+        _lastPaintX =
+            x;
+
+        _lastPaintY =
+            y;
+
+        PaintBrushAt(
+            state,
+            x,
+            y,
+            (byte)_selectedPaletteIndex);
+
+        CaptureCurrentEdit();
+
+        RefreshPreview();
+
+        PreviewImage.CaptureMouse();
+
+        e.Handled =
+            true;
+    }
+
+    private void PreviewImage_MouseMove(
+        object sender,
+        MouseEventArgs e)
+    {
+        if (!_pixelStrokeActive ||
+            e.LeftButton !=
+                MouseButtonState.Pressed ||
+            GetActiveTextureRow() is not
+                TextureRow row)
+        {
+            return;
+        }
+
+        PixelEditState state =
+            EnsurePixelState(
+                row);
+
+        if (!TryGetTexturePixel(
+                e,
+                state,
+                out int x,
+                out int y))
+        {
+            return;
+        }
+
+        PaintLine(
+            state,
+            _lastPaintX ??
+                x,
+            _lastPaintY ??
+                y,
+            x,
+            y,
+            (byte)_selectedPaletteIndex);
+
+        _lastPaintX =
+            x;
+
+        _lastPaintY =
+            y;
+
+        CaptureCurrentEdit();
+
+        RefreshPreview();
+
+        e.Handled =
+            true;
+    }
+
+    private void PreviewImage_MouseLeftButtonUp(
+        object sender,
+        MouseButtonEventArgs e)
+    {
+        if (!_pixelStrokeActive)
+        {
+            return;
+        }
+
+        _pixelStrokeActive =
+            false;
+
+        _lastPaintX =
+            null;
+
+        _lastPaintY =
+            null;
+
+        PreviewImage.ReleaseMouseCapture();
+
+        if (GetActiveTextureRow() is
+                TextureRow row &&
+            _pixelStates.TryGetValue(
+                row.Texture.DirectoryIndex,
+                out PixelEditState? state))
+        {
+            CompletePixelOperation(
+                row,
+                state);
+        }
+
+        e.Handled =
+            true;
+    }
+
+    private bool TryGetTexturePixel(
+        MouseEventArgs e,
+        PixelEditState state,
+        out int x,
+        out int y)
+    {
+        x =
+            0;
+
+        y =
+            0;
+
+        if (PreviewImage.ActualWidth <=
+                0 ||
+            PreviewImage.ActualHeight <=
+                0)
+        {
+            return false;
+        }
+
+        Point point =
+            e.GetPosition(
+                PreviewImage);
+
+        if (point.X <
+                0 ||
+            point.Y <
+                0 ||
+            point.X >=
+                PreviewImage.ActualWidth ||
+            point.Y >=
+                PreviewImage.ActualHeight)
+        {
+            return false;
+        }
+
+        double normalizedX =
+            point.X /
+            PreviewImage.ActualWidth;
+
+        double normalizedY =
+            point.Y /
+            PreviewImage.ActualHeight;
+
+        x =
+            Math.Clamp(
+                (int)(normalizedX *
+                      state.Width),
+                0,
+                state.Width -
+                    1);
+
+        y =
+            Math.Clamp(
+                (int)(normalizedY *
+                      state.Height),
+                0,
+                state.Height -
+                    1);
+
+        return true;
+    }
+    private void BeginPixelOperation(
+        PixelEditState state)
+    {
+        state.Undo.Push(
+            state.Pixels.ToArray());
+
+        state.Redo.Clear();
+
+        UpdateUndoRedoButtons(
+            state);
+    }
+
+    private void CompletePixelOperation(
+        TextureRow row,
+        PixelEditState state)
+    {
+        CaptureCurrentEdit();
+
+        int[] selectedDirectoryIndexes =
+            TextureList.SelectedItems
+                .Cast<TextureRow>()
+                .Select(
+                    selected =>
+                        selected.Texture.DirectoryIndex)
+                .ToArray();
+
+        RefreshRowsPreservingSelection(
+            selectedDirectoryIndexes,
+            row.Texture.DirectoryIndex);
+
+        UpdateUndoRedoButtons(
+            state);
+
+        UpdatePendingUi();
+
+        RefreshPreview();
+    }
+
+    private void PaintLine(
+        PixelEditState state,
+        int x0,
+        int y0,
+        int x1,
+        int y1,
+        byte paletteIndex)
+    {
+        int dx =
+            Math.Abs(
+                x1 -
+                x0);
+
+        int sx =
+            x0 <
+                x1
+                ? 1
+                : -1;
+
+        int dy =
+            -Math.Abs(
+                y1 -
+                y0);
+
+        int sy =
+            y0 <
+                y1
+                ? 1
+                : -1;
+
+        int error =
+            dx +
+            dy;
+
+        while (true)
+        {
+            PaintBrushAt(
+                state,
+                x0,
+                y0,
+                paletteIndex);
+
+            if (x0 ==
+                    x1 &&
+                y0 ==
+                    y1)
+            {
+                break;
+            }
+
+            int doubled =
+                2 *
+                error;
+
+            if (doubled >=
+                dy)
+            {
+                error +=
+                    dy;
+
+                x0 +=
+                    sx;
+            }
+
+            if (doubled <=
+                dx)
+            {
+                error +=
+                    dx;
+
+                y0 +=
+                    sy;
+            }
+        }
+    }
+
+    private void PaintBrushAt(
+        PixelEditState state,
+        int centerX,
+        int centerY,
+        byte paletteIndex)
+    {
+        int brushSize =
+            GetBrushSize();
+
+        int half =
+            brushSize /
+            2;
+
+        for (int y = centerY -
+                         half;
+             y <=
+                 centerY +
+                 half;
+             y++)
+        {
+            if (y <
+                    0 ||
+                y >=
+                    state.Height)
+            {
+                continue;
+            }
+
+            for (int x = centerX -
+                             half;
+                 x <=
+                     centerX +
+                     half;
+                 x++)
+            {
+                if (x <
+                        0 ||
+                    x >=
+                        state.Width)
+                {
+                    continue;
+                }
+
+                state.Pixels[
+                    (y *
+                     state.Width) +
+                    x] =
+                    paletteIndex;
+            }
+        }
+    }
+
+    private static void FloodFill(
+        PixelEditState state,
+        int startX,
+        int startY,
+        byte replacement)
+    {
+        int startIndex =
+            (startY *
+             state.Width) +
+            startX;
+
+        byte target =
+            state.Pixels[
+                startIndex];
+
+        if (target ==
+            replacement)
+        {
+            return;
+        }
+
+        Queue<int> queue =
+            new();
+
+        queue.Enqueue(
+            startIndex);
+
+        state.Pixels[
+            startIndex] =
+            replacement;
+
+        while (queue.Count >
+               0)
+        {
+            int index =
+                queue.Dequeue();
+
+            int x =
+                index %
+                state.Width;
+
+            int y =
+                index /
+                state.Width;
+
+            TryQueue(
+                x -
+                    1,
+                y);
+
+            TryQueue(
+                x +
+                    1,
+                y);
+
+            TryQueue(
+                x,
+                y -
+                    1);
+
+            TryQueue(
+                x,
+                y +
+                    1);
+        }
+
+        void TryQueue(
+            int x,
+            int y)
+        {
+            if (x <
+                    0 ||
+                y <
+                    0 ||
+                x >=
+                    state.Width ||
+                y >=
+                    state.Height)
+            {
+                return;
+            }
+
+            int index =
+                (y *
+                 state.Width) +
+                x;
+
+            if (state.Pixels[index] !=
+                target)
+            {
+                return;
+            }
+
+            state.Pixels[index] =
+                replacement;
+
+            queue.Enqueue(
+                index);
+        }
+    }
+
+    private bool TryEnsureActiveTextureMasked(
+        TextureRow row)
+    {
+        WadTextureEdit? existing =
+            _stagedEdits.TryGetValue(
+                    row.Texture.DirectoryIndex,
+                    out WadTextureEdit? pending)
+                ? pending
+                : null;
+
+        string currentName =
+            existing?.NewInternalName ??
+            row.Texture.InternalName;
+
+        if (currentName.StartsWith(
+                "{",
+                StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        string maskedName =
+            "{" +
+            currentName;
+
+        if (!IsValidDraftName(
+                maskedName))
+        {
+            StatusText.Text =
+                "Transparency painting needs a { mask prefix, but adding it would exceed the 16-byte texture-name limit. Shorten the internal name first.";
+
+            return false;
+        }
+
+        _updatingEditorFields =
+            true;
+
+        try
+        {
+            TextureNameTextBox.Text =
+                maskedName;
+
+            MaskedCheckBox.IsChecked =
+                true;
+        }
+        finally
+        {
+            _updatingEditorFields =
+                false;
+        }
+
+        SetStagedTextureEdit(
+            row,
+            maskedName,
+            existing?.RemapIndexTo255,
+            GetEditedPixelsForRow(
+                row));
+
+        UpdatePendingUi();
+
+        return true;
+    }
+
+    private void UndoPixel_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (GetActiveTextureRow() is not
+                TextureRow row)
+        {
+            return;
+        }
+
+        PixelEditState state =
+            EnsurePixelState(
+                row);
+
+        if (state.Undo.Count ==
+            0)
+        {
+            return;
+        }
+
+        state.Redo.Push(
+            state.Pixels.ToArray());
+
+        state.Pixels =
+            state.Undo.Pop();
+
+        CompletePixelOperation(
+            row,
+            state);
+    }
+
+    private void RedoPixel_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (GetActiveTextureRow() is not
+                TextureRow row)
+        {
+            return;
+        }
+
+        PixelEditState state =
+            EnsurePixelState(
+                row);
+
+        if (state.Redo.Count ==
+            0)
+        {
+            return;
+        }
+
+        state.Undo.Push(
+            state.Pixels.ToArray());
+
+        state.Pixels =
+            state.Redo.Pop();
+
+        CompletePixelOperation(
+            row,
+            state);
+    }
+
+    private void UpdateUndoRedoButtons(
+        PixelEditState state)
+    {
+        UndoPixelButton.IsEnabled =
+            state.Undo.Count >
+            0;
+
+        RedoPixelButton.IsEnabled =
+            state.Redo.Count >
+            0;
     }
     private void PreviewRepairCheckBox_Changed(
         object sender,
@@ -687,7 +2125,7 @@ public partial class TextureEditorWindow : Window
     {
         if (_document is
                 null ||
-            TextureList.SelectedItem is not
+            GetActiveTextureRow() is not
                 TextureRow row)
         {
             return;
@@ -695,34 +2133,74 @@ public partial class TextureEditorWindow : Window
 
         try
         {
-            int? transparentIndex =
-                null;
+            PixelEditState state =
+                EnsurePixelState(
+                    row);
 
-            if (PreviewRepairCheckBox.IsChecked ==
-                true)
+            byte[] previewPixels =
+                state.Pixels.ToArray();
+
+            WadTextureEdit? staged =
+                _stagedEdits.TryGetValue(
+                        row.Texture.DirectoryIndex,
+                        out WadTextureEdit? pending)
+                    ? pending
+                    : null;
+
+            string name =
+                staged?.NewInternalName ??
+                row.Texture.InternalName;
+
+            int? remap =
+                staged?.RemapIndexTo255;
+
+            bool showTransparency =
+                PreviewRepairCheckBox.IsChecked ==
+                true;
+
+            bool make255Transparent =
+                false;
+
+            if (showTransparency &&
+                remap.HasValue &&
+                remap.Value !=
+                    255)
             {
-                if (RemapEdgeCheckBox.IsChecked ==
-                    true)
+                for (int index = 0;
+                     index <
+                         previewPixels.Length;
+                     index++)
                 {
-                    transparentIndex =
-                        row.Texture.DominantEdgeIndex;
+                    if (previewPixels[index] ==
+                        (byte)remap.Value)
+                    {
+                        previewPixels[index] =
+                            255;
+                    }
                 }
-                else if (TextureNameTextBox.Text.Trim()
-                    .StartsWith(
-                        "{",
-                        StringComparison.Ordinal))
-                {
-                    transparentIndex =
-                        255;
-                }
+
+                make255Transparent =
+                    true;
+            }
+
+            if (showTransparency &&
+                name.StartsWith(
+                    "{",
+                    StringComparison.Ordinal))
+            {
+                make255Transparent =
+                    true;
             }
 
             RgbaImage preview =
-                WadTextureEditorService.ReadPreview(
-                    _document.WadPath,
-                    row.Texture.DirectoryIndex,
-                    _wad2PalettePath,
-                    transparentIndex);
+                WadTextureEditorService.RenderIndexedPreview(
+                    state.Width,
+                    state.Height,
+                    previewPixels,
+                    state.Palette,
+                    make255Transparent
+                        ? 255
+                        : null);
 
             PreviewImage.Source =
                 CreateBitmap(
@@ -730,17 +2208,6 @@ public partial class TextureEditorWindow : Window
 
             PreviewPlaceholder.Visibility =
                 Visibility.Collapsed;
-        }
-        catch (InvalidOperationException exception)
-        {
-            PreviewImage.Source =
-                null;
-
-            PreviewPlaceholder.Text =
-                exception.Message;
-
-            PreviewPlaceholder.Visibility =
-                Visibility.Visible;
         }
         catch (Exception exception)
         {
@@ -755,119 +2222,68 @@ public partial class TextureEditorWindow : Window
                 Visibility.Visible;
         }
     }
-
     private void StageEdit_Click(
         object sender,
         RoutedEventArgs e)
     {
-        if (_document is
-                null ||
-            TextureList.SelectedItem is not
+        if (GetActiveTextureRow() is not
                 TextureRow row)
         {
             return;
         }
 
-        try
-        {
-            string newName =
-                TextureNameTextBox.Text.Trim();
+        CaptureCurrentEdit();
 
-            if (string.IsNullOrWhiteSpace(
-                    newName))
-            {
-                throw new InvalidOperationException(
-                    "Texture names cannot be blank.");
-            }
+        int[] selectedDirectoryIndexes =
+            TextureList.SelectedItems
+                .Cast<TextureRow>()
+                .Select(
+                    selected =>
+                        selected.Texture.DirectoryIndex)
+                .ToArray();
 
-            if (newName.Any(
-                    character =>
-                        character >
-                        127))
-            {
-                throw new InvalidOperationException(
-                    "Internal WAD texture names must use ASCII characters.");
-            }
+        RefreshRowsPreservingSelection(
+            selectedDirectoryIndexes,
+            row.Texture.DirectoryIndex);
 
-            if (System.Text.Encoding.ASCII.GetByteCount(
-                    newName) >
-                16)
-            {
-                throw new InvalidOperationException(
-                    "Internal WAD texture names are limited to 16 bytes.");
-            }
+        UpdatePendingUi();
 
-            int? remap =
-                RemapEdgeCheckBox.IsChecked ==
-                    true
-                    ? row.Texture.DominantEdgeIndex
-                    : null;
-
-            if (remap ==
-                255)
-            {
-                remap =
-                    null;
-            }
-
-            _stagedEdits[
-                row.Texture.DirectoryIndex] =
-                new WadTextureEdit(
-                    row.Texture.DirectoryIndex,
-                    newName,
-                    remap);
-
-            RefreshRows();
-
-            TextureList.SelectedItem =
-                _rows.FirstOrDefault(
-                    item =>
-                        item.Texture.DirectoryIndex ==
-                        row.Texture.DirectoryIndex);
-
-            UpdatePendingUi();
-
-            StatusText.Text =
-                $"Staged changes for '{row.Texture.InternalName}'.";
-        }
-        catch (Exception exception)
-        {
-            MessageBox.Show(
-                this,
-                exception.Message,
-                "Stage Texture Edit",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-        }
+        StatusText.Text =
+            $"Staged changes for '{row.Texture.InternalName}'.";
     }
-
     private void UnstageEdit_Click(
         object sender,
         RoutedEventArgs e)
     {
-        if (TextureList.SelectedItem is not
+        if (GetActiveTextureRow() is not
             TextureRow row)
         {
             return;
         }
 
+        int[] selectedDirectoryIndexes =
+            TextureList.SelectedItems
+                .Cast<TextureRow>()
+                .Select(
+                    selected =>
+                        selected.Texture.DirectoryIndex)
+                .ToArray();
+
         _stagedEdits.Remove(
             row.Texture.DirectoryIndex);
 
-        RefreshRows();
+        _pixelStates.Remove(
+            row.Texture.DirectoryIndex);
 
-        TextureList.SelectedItem =
-            _rows.FirstOrDefault(
-                item =>
-                    item.Texture.DirectoryIndex ==
-                    row.Texture.DirectoryIndex);
+        RefreshRowsPreservingSelection(
+            selectedDirectoryIndexes,
+            row.Texture.DirectoryIndex);
 
         UpdatePendingUi();
 
         StatusText.Text =
             "Staged edit removed.";
     }
-
     private void SaveCopy_Click(
         object sender,
         RoutedEventArgs e)
@@ -918,6 +2334,7 @@ public partial class TextureEditorWindow : Window
                         .ToArray());
 
             _stagedEdits.Clear();
+            _pixelStates.Clear();
 
             LoadWad(
                 result.OutputPath);
@@ -935,7 +2352,6 @@ public partial class TextureEditorWindow : Window
                 MessageBoxImage.Warning);
         }
     }
-
     private void SaveInPlace_Click(
         object sender,
         RoutedEventArgs e)
@@ -975,6 +2391,7 @@ public partial class TextureEditorWindow : Window
                         .ToArray());
 
             _stagedEdits.Clear();
+            _pixelStates.Clear();
 
             LoadWad(
                 result.OutputPath);
@@ -992,7 +2409,6 @@ public partial class TextureEditorWindow : Window
                 MessageBoxImage.Warning);
         }
     }
-
     private void UpdatePendingUi()
     {
         PendingText.Text =
@@ -1182,6 +2598,54 @@ public partial class TextureEditorWindow : Window
         return bitmap;
     }
 
+    private enum PixelTool
+    {
+        Pencil,
+        Fill,
+        Eyedropper
+    }
+
+    private sealed class PixelEditState
+    {
+        public PixelEditState(
+            int width,
+            int height,
+            byte[] originalPixels,
+            byte[] pixels,
+            IReadOnlyList<Rgb24> palette)
+        {
+            Width =
+                width;
+
+            Height =
+                height;
+
+            OriginalPixels =
+                originalPixels;
+
+            Pixels =
+                pixels;
+
+            Palette =
+                palette;
+        }
+
+        public int Width { get; }
+
+        public int Height { get; }
+
+        public byte[] OriginalPixels { get; }
+
+        public byte[] Pixels { get; set; }
+
+        public IReadOnlyList<Rgb24> Palette { get; }
+
+        public Stack<byte[]> Undo { get; } =
+            new();
+
+        public Stack<byte[]> Redo { get; } =
+            new();
+    }
     private sealed record TextureRow(
         WadTextureEditorTexture Texture,
         string StatusText)

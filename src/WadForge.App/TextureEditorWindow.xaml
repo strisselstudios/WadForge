@@ -105,10 +105,32 @@
                 <Button Style="{StaticResource DarkButtonStyle}"
                         Click="OpenWad_Click"
                         Content="Open WAD" />
-                <Button x:Name="ChoosePaletteButton"
+                <StackPanel x:Name="PalettePanel"
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center">
+                    <TextBlock Margin="0,0,0,4"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Text="Palette" />
+                    <ComboBox x:Name="PaletteComboBox"
+                              Width="180"
+                              Foreground="#FFFFFF"
+                              Background="#303842"
+                              BorderBrush="#56616E"
+                              Padding="8,5"
+                              SelectionChanged="PaletteComboBox_SelectionChanged"
+                              ToolTip="Palette used for WAD2 texture previews">
+                        <ComboBoxItem Tag="quake"
+                                      Foreground="#FFFFFF"
+                                      Background="#303842"
+                                      Content="Quake (default)" />
+                    </ComboBox>
+                </StackPanel>
+                <Button x:Name="AddPaletteButton"
                         Style="{StaticResource DarkButtonStyle}"
-                        Click="ChoosePalette_Click"
-                        Content="WAD2 Palette" />
+                        Click="AddPalette_Click"
+                        Content="Add Palette..." />
                 <Button x:Name="SaveCopyButton"
                         Style="{StaticResource DarkButtonStyle}"
                         Click="SaveCopy_Click"
@@ -184,7 +206,7 @@
                                    Margin="0,7,0,0"
                                    Foreground="{StaticResource SecondaryTextBrush}"
                                    FontSize="10"
-                                   Text="0 selected Â· Ctrl/Shift-click for batch actions" />
+                                   Text="0 selected - Ctrl/Shift-click for batch actions" />
                         <WrapPanel Margin="0,5,0,0">
                             <Button x:Name="BatchAddMaskButton"
                                     Style="{StaticResource DarkButtonStyle}"
@@ -237,28 +259,140 @@
             </Border>
 
             <Border Grid.Column="2"
-                    Background="{StaticResource CheckerBrush}"
+                    Background="#171B21"
                     BorderBrush="{StaticResource PanelBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="5">
                 <Grid>
-                    <Image x:Name="PreviewImage"
-                           Margin="18"
-                           Stretch="Uniform"
-                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                    <TextBlock x:Name="PreviewPlaceholder"
-                               Margin="24"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Foreground="#2A2E35"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               TextAlignment="Center"
-                               Text="Select a texture to preview it." />
-                </Grid>
-            </Border>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
 
-            <Border Grid.Column="4"
+                    <Border Grid.Row="0"
+                            Padding="8"
+                            Background="#1D2229"
+                            BorderBrush="{StaticResource PanelBorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <WrapPanel x:Name="PixelToolsPanel"
+                                   VerticalAlignment="Center">
+                            <Button x:Name="PencilToolButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Click="PencilTool_Click"
+                                    Content="Pencil" />
+                            <Button x:Name="FillToolButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Click="FillTool_Click"
+                                    Content="Fill" />
+                            <Button x:Name="EyedropperToolButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Click="EyedropperTool_Click"
+                                    Content="Pick" />
+                            <Button x:Name="TransparencyToolButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Click="TransparencyTool_Click"
+                                    Content="Transparency" />
+                            <TextBlock Margin="4,0,5,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       Text="Brush" />
+                            <ComboBox x:Name="BrushSizeComboBox"
+                                      Width="58"
+                                      Margin="0,0,8,0"
+                                      Foreground="#FFFFFF"
+                                      Background="#303842"
+                                      BorderBrush="#56616E"
+                                      SelectedIndex="0">
+                                <ComboBoxItem Tag="1" Content="1" />
+                                <ComboBoxItem Tag="3" Content="3" />
+                                <ComboBoxItem Tag="5" Content="5" />
+                            </ComboBox>
+                            <Button x:Name="UndoPixelButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    IsEnabled="False"
+                                    Click="UndoPixel_Click"
+                                    Content="Undo" />
+                            <Button x:Name="RedoPixelButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Margin="0"
+                                    IsEnabled="False"
+                                    Click="RedoPixel_Click"
+                                    Content="Redo" />
+                            <TextBlock Margin="10,0,5,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       Text="Zoom" />
+                            <Button x:Name="ZoomOutButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Click="ZoomOut_Click"
+                                    Content="-" />
+                            <Button x:Name="ZoomFitButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Click="ZoomFit_Click"
+                                    Content="Fit" />
+                            <Button x:Name="ZoomActualButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Click="ZoomActual_Click"
+                                    Content="1:1" />
+                            <Button x:Name="ZoomInButton"
+                                    Style="{StaticResource DarkButtonStyle}"
+                                    Padding="8,5"
+                                    Click="ZoomIn_Click"
+                                    Content="+" />
+                            <TextBlock x:Name="ZoomText"
+                                       Margin="2,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       MinWidth="62"
+                                       Text="Fit" />                        </WrapPanel>
+                    </Border>
+
+                    <Border Grid.Row="1"
+                            Background="{StaticResource CheckerBrush}">
+                        <ScrollViewer x:Name="PreviewScrollViewer"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      PanningMode="Both"
+                                      PreviewMouseWheel="PreviewScrollViewer_PreviewMouseWheel">
+                            <Grid Margin="18">
+                                <Image x:Name="PreviewImage"
+                                       Stretch="None"
+                                       Cursor="Cross"
+                                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                       MouseLeftButtonDown="PreviewImage_MouseLeftButtonDown"
+                                       MouseMove="PreviewImage_MouseMove"
+                                       MouseLeftButtonUp="PreviewImage_MouseLeftButtonUp">
+                                    <Image.LayoutTransform>
+                                        <ScaleTransform x:Name="PreviewScaleTransform"
+                                                        ScaleX="1"
+                                                        ScaleY="1" />
+                                    </Image.LayoutTransform>
+                                </Image>
+                                <TextBlock x:Name="PreviewPlaceholder"
+                                           Margin="24"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="#2A2E35"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           TextAlignment="Center"
+                                           Text="Select a texture to preview it." />
+                            </Grid>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </Border>            <Border Grid.Column="4"
                     Padding="14"
                     Background="{StaticResource PanelBackgroundBrush}"
                     BorderBrush="{StaticResource PanelBorderBrush}"
@@ -308,7 +442,33 @@
                                    TextWrapping="Wrap"
                                    Text="Select a texture for details." />
 
-                        <Border Margin="0,16,0,16"
+                        <TextBlock Margin="0,16,0,5"
+                                   FontWeight="SemiBold"
+                                   Text="Pixel color" />
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <Border x:Name="SelectedPaletteSwatch"
+                                    Width="30"
+                                    Height="22"
+                                    BorderBrush="#FFFFFF"
+                                    BorderThickness="1"
+                                    Background="#000000" />
+                            <TextBlock x:Name="SelectedPaletteIndexText"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       Text="Index 0" />
+                        </StackPanel>
+                        <UniformGrid x:Name="PaletteGrid"
+                                     Margin="0,8,0,0"
+                                     Columns="16"
+                                     Rows="16"
+                                     MinHeight="240" />
+                        <TextBlock Margin="0,8,0,0"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="10"
+                                   TextWrapping="Wrap"
+                                   Text="Pixel tools affect only the active preview texture. Choose index 255 or Transparency to paint explicit mask pixels." />                        <Border Margin="0,16,0,16"
                                 BorderBrush="{StaticResource PanelBorderBrush}"
                                 BorderThickness="0,1,0,0" />
 

@@ -25,10 +25,17 @@ public sealed record WadTextureEditorDocument(
     WadFormat Format,
     IReadOnlyList<WadTextureEditorTexture> Textures);
 
+public sealed record WadIndexedTextureData(
+    int DirectoryIndex,
+    int Width,
+    int Height,
+    byte[] Pixels,
+    IReadOnlyList<Rgb24> Palette);
 public sealed record WadTextureEdit(
     int DirectoryIndex,
     string NewInternalName,
-    int? RemapIndexTo255);
+    int? RemapIndexTo255,
+    byte[]? EditedMip0Pixels = null);
 
 public sealed record WadTextureEditSaveResult(
     string OutputPath,
@@ -179,6 +186,156 @@ public static class WadTextureEditorService
             textures);
     }
 
+    public static WadIndexedTextureData ReadIndexedTexture(
+        string wadPath,
+        int directoryIndex,
+        string? wad2PalettePath = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            wadPath);
+
+        using FileStream stream =
+            new(
+                Path.GetFullPath(
+                    wadPath),
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite |
+                FileShare.Delete);
+
+        using BinaryReader reader =
+            new(
+                stream,
+                Encoding.ASCII,
+                leaveOpen:
+                    true);
+
+        var (format, _, entries) =
+            ReadDirectory(
+                stream,
+                reader);
+
+        DirectoryEntry entry =
+            entries.FirstOrDefault(
+                candidate =>
+                    candidate.DirectoryIndex ==
+                    directoryIndex) ??
+            throw new ArgumentOutOfRangeException(
+                nameof(directoryIndex),
+                "The selected texture directory entry does not exist.");
+
+        TextureHeader header =
+            ReadTextureHeader(
+                stream,
+                reader,
+                entry);
+
+        byte[] pixels =
+            ReadMipLevel(
+                stream,
+                reader,
+                entry,
+                header,
+                level:
+                    0);
+
+        IReadOnlyList<Rgb24>? palette =
+            format ==
+                WadFormat.Wad3
+                ? ReadEmbeddedWad3Palette(
+                    stream,
+                    reader,
+                    entry,
+                    header)
+                : LoadOptionalPalette(
+                    wad2PalettePath);
+
+        if (palette is
+            null)
+        {
+            throw new InvalidOperationException(
+                "A WAD2 palette is required for indexed texture editing.");
+        }
+
+        return new WadIndexedTextureData(
+            directoryIndex,
+            header.Width,
+            header.Height,
+            pixels,
+            palette);
+    }
+
+    public static RgbaImage RenderIndexedPreview(
+        int width,
+        int height,
+        IReadOnlyList<byte> indexedPixels,
+        IReadOnlyList<Rgb24> palette,
+        int? transparentIndex = null)
+    {
+        ArgumentNullException.ThrowIfNull(
+            indexedPixels);
+
+        ArgumentNullException.ThrowIfNull(
+            palette);
+
+        int expected =
+            checked(
+                width *
+                height);
+
+        if (width <=
+                0 ||
+            height <=
+                0 ||
+            indexedPixels.Count !=
+                expected)
+        {
+            throw new ArgumentException(
+                "Indexed pixel dimensions do not match the supplied pixel buffer.");
+        }
+
+        if (palette.Count <
+            256)
+        {
+            throw new ArgumentException(
+                "Indexed texture palettes must contain 256 colors.");
+        }
+
+        Rgba32[] pixels =
+            new Rgba32[
+                expected];
+
+        for (int index = 0;
+             index <
+                 expected;
+             index++)
+        {
+            byte paletteIndex =
+                indexedPixels[index];
+
+            Rgb24 color =
+                palette[paletteIndex];
+
+            byte alpha =
+                transparentIndex.HasValue &&
+                paletteIndex ==
+                    transparentIndex.Value
+                    ? (byte)0
+                    : (byte)255;
+
+            pixels[index] =
+                new Rgba32(
+                    color.R,
+                    color.G,
+                    color.B,
+                    alpha);
+        }
+
+        return new RgbaImage(
+            width,
+            height,
+            pixels);
+    }
     public static RgbaImage ReadPreview(
         string wadPath,
         int directoryIndex,
@@ -716,9 +873,45 @@ public static class WadTextureEditorService
                 validatedName,
                 16);
 
-            if (edit.RemapIndexTo255.HasValue &&
-                edit.RemapIndexTo255.Value !=
-                    255)
+            if (edit.EditedMip0Pixels is not
+                null)
+            {
+                byte[] editedPixels =
+                    edit.EditedMip0Pixels.ToArray();
+
+                int expectedPixelCount =
+                    checked(
+                        header.Width *
+                        header.Height);
+
+                if (editedPixels.Length !=
+                    expectedPixelCount)
+                {
+                    throw new InvalidOperationException(
+                        $"Edited pixel buffer for '{header.InternalName}' has {editedPixels.Length:N0} pixels; expected {expectedPixelCount:N0}.");
+                }
+
+                if (edit.RemapIndexTo255.HasValue &&
+                    edit.RemapIndexTo255.Value !=
+                        255)
+                {
+                    ReplacePaletteIndex(
+                        editedPixels,
+                        edit.RemapIndexTo255.Value,
+                        255);
+                }
+
+                WriteEditedMipChain(
+                    stream,
+                    reader,
+                    writer,
+                    entry,
+                    header,
+                    editedPixels);
+            }
+            else if (edit.RemapIndexTo255.HasValue &&
+                     edit.RemapIndexTo255.Value !=
+                         255)
             {
                 RemapMipIndex(
                     stream,
@@ -736,6 +929,237 @@ public static class WadTextureEditorService
                 true);
     }
 
+    private static void WriteEditedMipChain(
+        FileStream stream,
+        BinaryReader reader,
+        BinaryWriter writer,
+        DirectoryEntry entry,
+        TextureHeader header,
+        byte[] mip0Pixels)
+    {
+        byte[] current =
+            mip0Pixels;
+
+        int currentWidth =
+            header.Width;
+
+        int currentHeight =
+            header.Height;
+
+        for (int level = 0;
+             level <
+                 4;
+             level++)
+        {
+            int expectedWidth =
+                Math.Max(
+                    1,
+                    header.Width >>
+                    level);
+
+            int expectedHeight =
+                Math.Max(
+                    1,
+                    header.Height >>
+                    level);
+
+            if (level >
+                0)
+            {
+                current =
+                    DownsampleIndexed(
+                        current,
+                        currentWidth,
+                        currentHeight,
+                        expectedWidth,
+                        expectedHeight);
+
+                currentWidth =
+                    expectedWidth;
+
+                currentHeight =
+                    expectedHeight;
+            }
+
+            byte[] existing =
+                ReadMipLevel(
+                    stream,
+                    reader,
+                    entry,
+                    header,
+                    level);
+
+            if (current.Length !=
+                existing.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Generated mip level {level} for '{header.InternalName}' has an unexpected size.");
+            }
+
+            stream.Position =
+                checked(
+                    (long)entry.FilePosition +
+                    header.MipOffsets[level]);
+
+            writer.Write(
+                current);
+        }
+    }
+
+    private static byte[] DownsampleIndexed(
+        byte[] source,
+        int sourceWidth,
+        int sourceHeight,
+        int destinationWidth,
+        int destinationHeight)
+    {
+        byte[] destination =
+            new byte[
+                checked(
+                    destinationWidth *
+                    destinationHeight)];
+
+        Span<byte> samples =
+            stackalloc byte[
+                4];
+
+        for (int y = 0;
+             y <
+                 destinationHeight;
+             y++)
+        {
+            for (int x = 0;
+                 x <
+                     destinationWidth;
+                 x++)
+            {
+                int sourceX =
+                    Math.Min(
+                        sourceWidth -
+                        1,
+                        x *
+                        2);
+
+                int sourceY =
+                    Math.Min(
+                        sourceHeight -
+                        1,
+                        y *
+                        2);
+
+                int sampleCount =
+                    0;
+
+                for (int offsetY = 0;
+                     offsetY <
+                         2;
+                     offsetY++)
+                {
+                    int sampleY =
+                        Math.Min(
+                            sourceHeight -
+                                1,
+                            sourceY +
+                                offsetY);
+
+                    for (int offsetX = 0;
+                         offsetX <
+                             2;
+                         offsetX++)
+                    {
+                        int sampleX =
+                            Math.Min(
+                                sourceWidth -
+                                    1,
+                                sourceX +
+                                    offsetX);
+
+                        samples[sampleCount++] =
+                            source[
+                                (sampleY *
+                                 sourceWidth) +
+                                sampleX];
+                    }
+                }
+
+                byte selected =
+                    samples[0];
+
+                int selectedCount =
+                    0;
+
+                for (int candidateIndex = 0;
+                     candidateIndex <
+                         sampleCount;
+                     candidateIndex++)
+                {
+                    byte candidate =
+                        samples[candidateIndex];
+
+                    int count =
+                        0;
+
+                    for (int sampleIndex = 0;
+                         sampleIndex <
+                             sampleCount;
+                         sampleIndex++)
+                    {
+                        if (samples[sampleIndex] ==
+                            candidate)
+                        {
+                            count++;
+                        }
+                    }
+
+                    if (count >
+                        selectedCount)
+                    {
+                        selected =
+                            candidate;
+
+                        selectedCount =
+                            count;
+                    }
+                }
+
+                destination[
+                    (y *
+                     destinationWidth) +
+                    x] =
+                    selected;
+            }
+        }
+
+        return destination;
+    }
+
+    private static void ReplacePaletteIndex(
+        byte[] pixels,
+        int sourceIndex,
+        byte destinationIndex)
+    {
+        if (sourceIndex <
+                0 ||
+            sourceIndex >
+                255)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(sourceIndex));
+        }
+
+        for (int index = 0;
+             index <
+                 pixels.Length;
+             index++)
+        {
+            if (pixels[index] ==
+                (byte)sourceIndex)
+            {
+                pixels[index] =
+                    destinationIndex;
+            }
+        }
+    }
     private static void RemapMipIndex(
         FileStream stream,
         BinaryReader reader,
@@ -955,13 +1379,12 @@ public static class WadTextureEditorService
         if (string.IsNullOrWhiteSpace(
                 palettePath))
         {
-            return null;
+            return BuiltInPalettes.Quake;
         }
 
         return PaletteFile.Load(
             palettePath);
     }
-
     private static IReadOnlyList<Rgb24> ReadEmbeddedWad3Palette(
         FileStream stream,
         BinaryReader reader,
